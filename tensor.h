@@ -38,16 +38,16 @@ void free_tensor(Tensor *t, bool free_storage);
 
 void print_tensor(Tensor *t);
 
-// deep copy (new storage)
+// matrix multiply
+void matrix_multiply(Tensor *left, Tensor *right, Tensor *output);
 
-// add
+// self add vector to matrix
+// tbd: generalize when we need it
+void self_add(Tensor *self, Tensor *to_add);
 
-// subtract
+// tbd: generalize to "sum" when we need it
+void column_sum(Tensor *input, Tensor *output);
 
-// element-wise mul
-
-// matrix mul
-
-// broadcasting support
-
+// tbd: generalize beyond 2d
+void transpose(Tensor *input, Tensor *output);
 #endif

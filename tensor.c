@@ -133,16 +133,52 @@ void print_tensor(Tensor *t) {
     printf("\n");
 }
 
-// copy (same storage)
+void matrix_multiply(Tensor *left, Tensor *right, Tensor *output) {
+    assert((left->dim == 2) && (right->dim == 2) && (output->dim == 2));
+    assert((output->sizes[0] == left->sizes[0]) && (output->sizes[1] == right->sizes[1]) && (left->sizes[1] == right->sizes[0]));
+    output->strides[0] = output->sizes[1];
+    output->strides[1] = 1;
+    for (int i = 0; i < output->sizes[0]; i++) {
+        for (int j = 0; j < output->sizes[1]; j++) {
+            output->storage[i * output->strides[0] + j] = 0;
+            for (int k = 0; k < left->sizes[1]; k++) {
+                output->storage[i * output->strides[0] + j] +=
+                    left->storage[i * left->strides[0] + k * left->strides[1]] *
+                    right->storage[k * right->strides[0] + j * right->strides[1]];
+            }
+        }
+    }
+}
 
-// copy (new storage)
+void self_add(Tensor *self, Tensor *to_add) {
+    assert((self->dim == 2) && (to_add->dim == 1));
+    assert(self->sizes[1] == to_add->sizes[0]);
+    for (unsigned int i = 0; i < self->sizes[0]; i++) {
+        float *ptr = self->storage + i * self->strides[0];
+        for (unsigned int j = 0; j < self->sizes[1]; j++) {
+            *(ptr + j * self->strides[1]) += *(to_add->storage + j * to_add->strides[0]);
+        }
+    }
+}
 
-// add
+void column_sum(Tensor *input, Tensor *output) {
+    assert((input->dim == 2) && (output->dim == 1));
+    // tbd: this is pretty cache-unfriendly
+    for (unsigned int j = 0; j < input->sizes[1]; j++) {
+        *(output->storage + j * output->strides[0]) = 0;
+        for (unsigned int i = 0; i < input->sizes[0]; i++) {
+            *(output->storage + j * output->strides[0]) += *(input->storage + i * input->strides[0] + j * input->strides[1]);
+        }
+    }
+}
 
-// subtract
+void transpose(Tensor *input, Tensor *output) {
+    assert(input->dim == 2);
+    output->dim = 2;
+    output->sizes[0] = input->sizes[1];
+    output->sizes[1] = input->sizes[0];
+    output->strides[0] = input->strides[1];
+    output->strides[1] = input->strides[0];
+    output->storage = input->storage;
+}
 
-// element-wise mul
-
-// matrix mul
-
-// broadcasting support
