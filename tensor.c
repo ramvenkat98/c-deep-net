@@ -133,6 +133,10 @@ void print_tensor(Tensor *t) {
     printf("\n");
 }
 
+// The operations below will, for now, only support 2d matrices and 1d vectors. The reason is that we only
+// need these at the moment, and supporting higher dimensional tensors for these operations will result in
+// unnecessary code bloat and inefficiencies.
+
 void matrix_multiply(Tensor *left, Tensor *right, Tensor *output) {
     assert((left->dim == 2) && (right->dim == 2) && (output->dim == 2));
     assert((output->sizes[0] == left->sizes[0]) && (output->sizes[1] == right->sizes[1]) && (left->sizes[1] == right->sizes[0]));
@@ -150,13 +154,19 @@ void matrix_multiply(Tensor *left, Tensor *right, Tensor *output) {
     }
 }
 
-void self_add(Tensor *self, Tensor *to_add) {
-    assert((self->dim == 2) && (to_add->dim == 1));
-    assert(self->sizes[1] == to_add->sizes[0]);
-    for (unsigned int i = 0; i < self->sizes[0]; i++) {
-        float *ptr = self->storage + i * self->strides[0];
-        for (unsigned int j = 0; j < self->sizes[1]; j++) {
-            *(ptr + j * self->strides[1]) += *(to_add->storage + j * to_add->strides[0]);
+// do not support implicit broadcasting
+void add(Tensor *input_1, Tensor *input_2, Tensor *output) {
+    assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
+    assert(
+            (input_1->sizes[0] == input_2->sizes[0]) && (input_1->sizes[1] == input_2->sizes[1]) &&
+            (input_1->sizes[0] == output->sizes[0]) && (input_1->sizes[1] == output->sizes[1])
+    );
+    for (unsigned int i = 0; i < input_1->sizes[0]; i++) {
+        for (unsigned int j = 0; j < input_1->sizes[1]; j++) {
+            // tbd: create a simple inline function to replace all instances of this 2d indexing in this file
+            *(output->storage + i * output->strides[0] + j * output->strides[1]) = 
+                *(input_1->storage + i * input_1->strides[0] + j * input_1->strides[1]) +
+                *(input_2->storage + i * input_2->strides[0] + j * input_2->strides[1]);
         }
     }
 }
@@ -173,12 +183,37 @@ void column_sum(Tensor *input, Tensor *output) {
 }
 
 void transpose(Tensor *input, Tensor *output) {
-    assert(input->dim == 2);
-    output->dim = 2;
-    output->sizes[0] = input->sizes[1];
-    output->sizes[1] = input->sizes[0];
-    output->strides[0] = input->strides[1];
-    output->strides[1] = input->strides[0];
+    output->dim = input->dim;
+    for (int i = 0; i < input->dim; i++) {
+        output->sizes[i] = input->sizes[i];
+        output->strides[i] = input->strides[i];
+    }
+    output->storage = input->storage;
+    output->sizes[output->dim - 2] = input->sizes[output->dim - 1];
+    output->sizes[output->dim - 1] = input->sizes[output->dim - 2];
+    output->strides[output->dim - 2] = input->strides[output->dim - 1];
+    output->strides[output->dim - 1] = input->strides[output->dim - 2];
     output->storage = input->storage;
 }
 
+bool broadcast_to(Tensor *input, unsigned int dim, unsigned int* sizes, Tensor *output) {
+    assert(input->dim <= dim);
+    output->dim = dim;
+    output->storage = input->storage;
+    for (int i = 0; i < output->dim; i++) {
+        output->sizes[i] = sizes[i];
+        // if the second condition is true and sizes[i] == 1, it doesn't matter what value strides[i] is -
+        // so setting it to 0 is fine in that edge case too.
+        if ((i < output->dim - input->dim) || (input->sizes[i - (output->dim - input->dim)] == 1)) {
+            output->strides[i] = 0;
+        }
+        else if (input->sizes[i - (output->dim - input->dim)] == sizes[i]) {
+            output->strides[i] = input->strides[i - (output->dim - input->dim)];
+        }
+        else {
+            printf("Broadcasting failed, dimensions don't match\n");
+            return false;
+        }
+    }
+    return true;
+}

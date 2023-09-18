@@ -26,7 +26,7 @@ void deallocate_layer_storage(FullyConnectedLinearLayer *layer) {
 
 void compute_outputs(FullyConnectedLinearLayer *layer, Tensor *X) {
     matrix_multiply(X, layer->W, layer->Z);
-    self_add(layer->Z, layer->b);
+    add(layer->Z, layer->b, layer->Z);
 }
 
 void compute_gradients(FullyConnectedLinearLayer *layer, Tensor *dOutput, Tensor *X) {

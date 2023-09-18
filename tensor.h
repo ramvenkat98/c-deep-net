@@ -38,16 +38,20 @@ void free_tensor(Tensor *t, bool free_storage);
 
 void print_tensor(Tensor *t);
 
-// matrix multiply
+Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage);
+
+// matrix multiply - only for 2d right now
 void matrix_multiply(Tensor *left, Tensor *right, Tensor *output);
 
-// self add vector to matrix
-// tbd: generalize when we need it
-void self_add(Tensor *self, Tensor *to_add);
+// self add vector to matrix - only for 2d right now
+void add(Tensor *input_1, Tensor *input_2, Tensor *output);
 
-// tbd: generalize to "sum" when we need it
+// only for 2d right now
 void column_sum(Tensor *input, Tensor *output);
 
-// tbd: generalize beyond 2d
+// default behavior: transposes the last two dimensions of the input tensor
+// tbd: if needed later on, add two arguments to optionally specify which dimensions to transpose
 void transpose(Tensor *input, Tensor *output);
+
+bool broadcast_to(Tensor *input, unsigned int dim, unsigned int *sizes, Tensor *output);
 #endif
