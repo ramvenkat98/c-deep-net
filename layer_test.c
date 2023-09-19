@@ -9,7 +9,8 @@ void test_simple_linear_regression() {
     // 16x16 images (greyscale: 0 to 1) -> 10 dim output, 256 x 10 weights
 }
 
-int main(int argc, char* argv[]) {
+void test_linear_layer() {
+    printf("Testing linear layer...\n");
     FullyConnectedLinearLayer l;
     assert(allocate_layer_storage(&l, 2, 4, 3));
     // set weights, biases, input
@@ -37,6 +38,36 @@ int main(int argc, char* argv[]) {
     free_tensor(input, false);
     free_tensor(dOutput, false);
     deallocate_layer_storage(&l);
+    printf("Linear layer test finished\n");
+}
+
+void test_tanh_layer() {
+    printf("Testing tanh layer...\n");
+    TanhLayer l;
+    assert(allocate_tanh_layer_storage(&l, 3, 5));
+    float storage[15];
+    for (int i = 0; i < 15; i++) {
+        storage[i] = i - 8.0;
+    }
+    Tensor *t = create_tensor(2, l.Z->sizes, l.Z->strides, storage);
+    compute_tanh_outputs(&l, t);
+    print_tensor(t);
+    print_tensor(l.Z);
+    float output_gradients[15];
+    init_from_normal_distribution(10.0, 2, output_gradients, 15);
+    Tensor *dOutput = create_tensor(2, l.Z->sizes, l.Z->strides, output_gradients);
+    compute_tanh_gradients(&l, dOutput, t);
+    print_tensor(dOutput);
+    print_tensor(l.dX);
+    free_tensor(t, false);
+    free_tensor(dOutput, false);
+    deallocate_tanh_layer_storage(&l);
+    printf("Tanh layer test finished\n");
+}
+
+int main(int argc, char* argv[]) {
+    test_linear_layer();
+    test_tanh_layer();
     printf("Tests finished\n");
     return 0;
 }
