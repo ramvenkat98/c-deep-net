@@ -5,6 +5,10 @@
 #include "layer.h"
 #include <string.h>
 
+void test_simple_linear_regression() {
+    // 16x16 images (greyscale: 0 to 1) -> 10 dim output, 256 x 10 weights
+}
+
 int main(int argc, char* argv[]) {
     FullyConnectedLinearLayer l;
     assert(allocate_layer_storage(&l, 2, 4, 3));
@@ -19,12 +23,19 @@ int main(int argc, char* argv[]) {
     float input_storage[8] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
     unsigned int input_sizes[2] = {2, 4};
     unsigned int input_strides[2] = {4, 1};
-    Tensor* input = create_tensor(2, input_sizes, input_strides, input_storage);
+    Tensor *input = create_tensor(2, input_sizes, input_strides, input_storage);
     // compute and verify outputs
     compute_outputs(&l, input);
     print_tensor(l.Z);
     // compute and verify gradients
+    float ones[6] = {1, 1, 1, 1, 1, 1};
+    Tensor *dOutput = create_tensor(2, l.Z->sizes, l.Z->strides, ones);
+    compute_gradients(&l, dOutput, input);
+    print_tensor(l.dW);
+    print_tensor(l.dB);
+    print_tensor(l.dX);
     free_tensor(input, false);
+    free_tensor(dOutput, false);
     deallocate_layer_storage(&l);
     printf("Tests finished\n");
     return 0;

@@ -183,8 +183,8 @@ void test_unary_ops_that_create_tensor_views() {
     printf("Test for unary ops creating tensor views over\n");
 }
 
-void test_add() {
-    printf("Testing for add...\n");
+void test_add_and_elemwise_multiply() {
+    printf("Testing for add and elemwise multiply...\n");
     unsigned int sizes_1[2] = {4, 3}; 
     unsigned int strides_1[2] = {3, 1};
     float storage_1[12] = {5.1, 3.2, 4.9, 1.1, 2.2, 0.1, 7.6, 5.5, 1.0, 2.0, 6.0, -1.0};
@@ -196,10 +196,14 @@ void test_add() {
     print_tensor(t3);
     add(t3, t1, t3);
     print_tensor(t3);
+    elemwise_multiply(t1, t2, t3);
+    print_tensor(t3);
+    elemwise_multiply(t3, t1, t3);
+    print_tensor(t3);
     free_tensor(t1, false);
     free_tensor(t2, false);
     free_tensor(t3, true);
-    printf("Test for add over\n");
+    printf("Test for add and elemwise multiply over\n");
 }
 
 void test_column_sum() {
@@ -223,13 +227,47 @@ void test_column_sum() {
     printf("Test for column sum over\n");
 }
 
+void test_tanh_tensor() {
+    printf("Testing for tanh on tensors...\n");
+    unsigned int sizes[2] = {2, 3};
+    unsigned int strides[2] = {3, 1};
+    float storage[6] = {-1.0, 0.0, 1.0, 5.2, -4.3, 100.0};
+    Tensor *t = create_tensor(2, sizes, strides, storage);
+    Tensor *t_out = create_zero(2, sizes);
+    tanh_tensor(t, t_out);
+    print_tensor(t);
+    print_tensor(t_out);
+    free_tensor(t, false);
+    free_tensor(t_out, true);
+    printf("Test for tanh over\n");
+}
+
+void test_elemwise_polynomial() {
+    printf("Testing for elemwise polynomial...\n");
+    unsigned int sizes[2] = {2, 3};
+    unsigned int strides[2] = {3, 1};
+    float storage[6] = {-1.0, 0.0, 1.0, 5.2, -4.3, 100.0};
+    Tensor *t = create_tensor(2, sizes, strides, storage);
+    float coefficients[5] = {-2.0, 0.0, -1.0, 0.0, 1.0};
+    Tensor *t_out = create_zero(2, sizes);
+    elemwise_polynomial(t, t_out, coefficients, 0); // -2 
+    print_tensor(t_out);
+    elemwise_polynomial(t, t_out, coefficients, 4); // x^4 - x^2 - 2
+    print_tensor(t_out);
+    free_tensor(t, false);
+    free_tensor(t_out, true);
+    printf("Test for elemwise polynomial over\n");
+}
+
 int main(int argc, char* argv[]) {
     // test generic tensor library operation
     test_creation_indexing_views_freeing();
     // test unary ops that create tensor views - transpose, broadcast for now
     test_unary_ops_that_create_tensor_views();
-    // test binary ops on tensor that are currently only supported for up to 2d matrices
+    // test ops on tensor that are currently only supported for up to 2d matrices
     test_matrix_multiply();
-    test_add();
+    test_add_and_elemwise_multiply();
     test_column_sum();
+    test_tanh_tensor();
+    test_elemwise_polynomial();
 }

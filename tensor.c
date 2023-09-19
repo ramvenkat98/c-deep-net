@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "tensor.h"
+#include <math.h>
 
 // create and fill with zeros
 Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
@@ -29,7 +30,7 @@ Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
 }
 
 // create from pointers
-// tbd: check safety
+// tbd: add asserts to sanitize user inputs
 Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage) {
     Tensor *result = malloc(sizeof(Tensor));
     if (!result) {
@@ -42,6 +43,38 @@ Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strid
     }
     result->storage = storage;
     return result;
+}
+
+// Simple helper function to get random normal variables using the inbuilt rand function
+// (which gives a uniform random number between 0 and 1)
+// credit:  ChatGPT - "What is the easiest way to create random normal variables in C?"
+double rand_normal(double mean, double stddev) {
+    static double n2 = 0.0;
+    static int n2_cached = 0;
+    if (!n2_cached) {
+        double x, y, r;
+        do {
+            x = 2.0 * rand() / RAND_MAX - 1;
+            y = 2.0 * rand() / RAND_MAX - 1;
+            r = x * x + y * y;
+        } while (r >= 1.0 || r == 0.0);
+        double d = sqrt(-2.0 * log(r) / r);
+        double n1 = x * d;
+        n2 = y * d;
+        double result = n1 * stddev + mean;
+        n2_cached = 1;
+        return result;
+    } else {
+        n2_cached = 0;
+        return n2 * stddev + mean;
+    }
+}
+
+// tbd: make this respect the tensor interface more elegantly
+void init_from_normal_distribution(double mean, double stddev, float *storage, unsigned int total_size) {
+    for (int i = 0; i < total_size; i++) {
+        storage[i] = (float)(rand_normal(mean, stddev));
+    }
 }
 
 float *get_ptr(Tensor *t, unsigned int *indices) {
@@ -171,6 +204,22 @@ void add(Tensor *input_1, Tensor *input_2, Tensor *output) {
     }
 }
 
+
+void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output) {
+    assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
+    assert(
+            (input_1->sizes[0] == input_2->sizes[0]) && (input_1->sizes[1] == input_2->sizes[1]) &&
+            (input_1->sizes[0] == output->sizes[0]) && (input_1->sizes[1] == output->sizes[1])
+    );
+    for (unsigned int i = 0; i < input_1->sizes[0]; i++) {
+        for (unsigned int j = 0; j < input_1->sizes[1]; j++) {
+            *(output->storage + i * output->strides[0] + j * output->strides[1]) = 
+                (*(input_1->storage + i * input_1->strides[0] + j * input_1->strides[1])) *
+                (*(input_2->storage + i * input_2->strides[0] + j * input_2->strides[1]));
+        }
+    }
+}
+
 void column_sum(Tensor *input, Tensor *output) {
     assert((input->dim == 2) && (output->dim == 1));
     // tbd: this is pretty cache-unfriendly
@@ -178,6 +227,48 @@ void column_sum(Tensor *input, Tensor *output) {
         *(output->storage + j * output->strides[0]) = 0;
         for (unsigned int i = 0; i < input->sizes[0]; i++) {
             *(output->storage + j * output->strides[0]) += *(input->storage + i * input->strides[0] + j * input->strides[1]);
+        }
+    }
+}
+
+// currently only supports matrices (2d) since we don't need more
+void tanh_tensor(Tensor *input, Tensor *output) {
+    assert((input->dim == 2) && (output->dim == 2));
+    assert((input->sizes[0] == output->sizes[0]) && (input->sizes[1] == output->sizes[1]));
+    for (unsigned int i = 0; i < input->sizes[0]; i++) {
+        for (unsigned int j = 0; j < input->sizes[1]; j++) {
+            // tbd: refactor the indexing logic later
+            *(output->storage + i * output->strides[0] + j * output->strides[1]) = (float)(
+                tanh(
+                    (double)
+                    (*(input->storage + i * input->strides[0] + j * input->strides[1]))
+                )
+            );
+        }
+    }
+}
+
+// todo: inline this
+float polynomial(float x, float *coefficients, unsigned int degree) {
+    float output = coefficients[0];
+    for (int i = 1; i <= degree; i++) {
+        output += pow(x, i) * coefficients[i];
+    }
+    return output;
+}
+
+void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, unsigned int degree) {
+    assert((input->dim == 2) && (output->dim == 2));
+    assert((input->sizes[0] == output->sizes[0]) && (input->sizes[1] == output->sizes[1]));
+    for (unsigned int i = 0; i < input->sizes[0]; i++) {
+        for (unsigned int j = 0; j < input->sizes[1]; j++) {
+            *(output->storage + i * output->strides[0] + j * output->strides[1]) = (
+                polynomial(
+                    (*(input->storage + i * input->strides[0] + j * input->strides[1])),
+                    coefficients,
+                    degree
+                )
+            );
         }
     }
 }

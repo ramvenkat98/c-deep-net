@@ -43,15 +43,24 @@ Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strid
 // matrix multiply - only for 2d right now
 void matrix_multiply(Tensor *left, Tensor *right, Tensor *output);
 
-// self add vector to matrix - only for 2d right now
 void add(Tensor *input_1, Tensor *input_2, Tensor *output);
+
+void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output);
 
 // only for 2d right now
 void column_sum(Tensor *input, Tensor *output);
+
+void tanh_tensor(Tensor *input, Tensor *output);
+
+void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, unsigned int degree);
 
 // default behavior: transposes the last two dimensions of the input tensor
 // tbd: if needed later on, add two arguments to optionally specify which dimensions to transpose
 void transpose(Tensor *input, Tensor *output);
 
 bool broadcast_to(Tensor *input, unsigned int dim, unsigned int *sizes, Tensor *output);
+
+// special function that directly uses a (contiguous) tensor's storage to set each cell to a random value
+// specified from a normal distribution
+void init_from_normal_distribution(double mean, double stddev, float *storage, unsigned int total_size);
 #endif

@@ -30,4 +30,18 @@ void compute_outputs(FullyConnectedLinearLayer *layer, Tensor *X);
 // backward pass step
 void compute_gradients(FullyConnectedLinearLayer *layer, Tensor *dOutput, Tensor *X);
 
+typedef struct TanhLayer {
+    unsigned int m; // num samples
+    unsigned int n; // input (and output) dim per sample
+    Tensor *Z; // outputs
+    Tensor *dX; // gradient with respect to inputs
+} TanhLayer;
+
+bool allocate_tanh_layer_storage(TanhLayer *layer, unsigned int m, unsigned int n);
+
+void deallocate_tanh_layer_storage(TanhLayer *layer);
+
+void compute_tanh_outputs(TanhLayer *layer, Tensor *X);
+
+void compute_tanh_gradients(TanhLayer *layer, Tensor *dOutput, Tensor *X);
 #endif

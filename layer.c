@@ -42,3 +42,27 @@ void compute_gradients(FullyConnectedLinearLayer *layer, Tensor *dOutput, Tensor
     column_sum(dOutput, layer->dB);
 }
 
+bool allocate_tanh_layer_storage(TanhLayer *layer, unsigned int m, unsigned int n) {
+    layer->m = m;
+    layer->n = m;
+    unsigned int sizes[2] = {m, n};
+    layer->dX = create_zero(2, sizes);
+    layer->Z = create_zero(2, sizes);
+    return (layer->dX && layer->Z);
+}
+
+void deallocate_tanh_layer_storage(TanhLayer *layer) {
+    free_tensor(layer->dX, true);
+    free_tensor(layer->Z, true);
+}
+
+void compute_tanh_outputs(TanhLayer *layer, Tensor *X) {
+    tanh_tensor(X, layer->Z);
+}
+
+void compute_tanh_gradients(TanhLayer *layer, Tensor *dOutput, Tensor *X) {
+    float coefficients[3] = {1, 0, -1};
+    elemwise_polynomial(layer->Z, layer->dX, coefficients, 2);
+    elemwise_multiply(layer->dX, dOutput, layer->dX);
+}
+
