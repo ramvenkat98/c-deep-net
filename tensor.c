@@ -4,6 +4,104 @@
 #include "tensor.h"
 #include <math.h>
 
+#define VECTOR_INDEX(x, i) (*((x)->storage + (i) * (x)->strides[0]))
+#define MATRIX_INDEX(x, i, j) (*((x)->storage + (i) * (x)->strides[0] + (j) * (x)->strides[1]))
+
+// tbd: add tests for >2d for new macros
+// tbd: verify macro correctness and verify that we're following proper conventions before deleting previous
+// non-macro implementations
+// tbd: enforce more naming consistency for clarity
+// (e.g. t vs input, result vs output, create_X vs get_X, elemwise_X, vs X_tensor)
+
+#define ADD(x, y) ((x) + (y))
+#define MULTIPLY(x, y) ((x) * (y))
+
+// we're strictly sticking to ANSI C, which doesn't contain variadic macros so we need these extra args
+// in our macro definition
+#define TANH(x, _arg_1, _arg_2) (tanh(x))
+#define POLYNOMIAL(x, coefficients, degree) (polynomial(x, coefficients, degree))
+
+// assumption: input_1, input_2, and output are already wellformed tensors
+// note: special case for dim 2 is not necessary, but since that's our most common case, might as well make it fast
+#define ELEMWISE_BINARY_OP(FUNCTION_NAME, OP) \
+    assert((input_1->dim == input_2->dim) && (input_1->dim == output->dim)); \
+    for (int i = 0; i < input_1->dim; i++) { \
+        assert( \
+            (input_1->sizes[i] == input_2->sizes[i]) && \
+            (input_1->sizes[i] == output->sizes[i]) \
+         ); \
+    } \
+    if (input_1->dim == 0) { \
+        *(output->storage) = OP(*(input_1->storage), *(input_2->storage)); \
+    } \
+    else if (input_1->dim == 1) { \
+        for (int i = 0; i < input_1->sizes[0]; i++) { \
+            VECTOR_INDEX(output, i) = OP(VECTOR_INDEX(input_1, i), VECTOR_INDEX(input_2, i)); \
+        } \
+    } \
+    else if (input_1->dim == 2) { \
+        for (int i = 0; i < input_1->sizes[0]; i++) { \
+            for (int j = 0; j < input_1->sizes[1]; j++) { \
+                MATRIX_INDEX(output, i, j) = OP(MATRIX_INDEX(input_1, i, j), MATRIX_INDEX(input_2, i, j)); \
+            } \
+        } \
+    } \
+    else { \
+        Tensor input_1_view, input_2_view, output_view; \
+        Indexer indices[MAX_TENSOR_DIM]; \
+        for (int i = 0; i < input_1->dim; i++) { \
+            indices[i].isRange = true; \
+            indices[i].start = 0; \
+            indices[i].end = input_1->sizes[i]; \
+        } \
+        for (int i = 0; i < input_1->sizes[0]; i++) { \
+            indices[0].isRange = false; \
+            indices[0].start = i; \
+            init_view(input_1, indices, &input_1_view); \
+            init_view(input_2, indices, &input_2_view); \
+            init_view(output, indices, &output_view); \
+            FUNCTION_NAME(&input_1_view, &input_2_view, &output_view); \
+        } \
+    }
+
+
+#define ELEMWISE_UNARY_OP(FUNCTION_NAME, OP, EXTRA_ARG_1, EXTRA_ARG_2) \
+    assert(input->dim == output->dim); \
+    for (int i = 0; i < input->dim; i++) { \
+        assert(input->sizes[i] == output->sizes[i]); \
+    } \
+    if (input->dim == 0) { \
+        *(output->storage) = OP(*(input->storage), EXTRA_ARG_1, EXTRA_ARG_2); \
+    } \
+    else if (input->dim == 1) { \
+        for (int i = 0; i < input->sizes[0]; i++) { \
+            VECTOR_INDEX(output, i) = OP(VECTOR_INDEX(input, i), EXTRA_ARG_1, EXTRA_ARG_2); \
+        } \
+    } \
+    else if (input->dim == 2) { \
+        for (int i = 0; i < input->sizes[0]; i++) { \
+            for (int j = 0; j < input->sizes[1]; j++) { \
+                MATRIX_INDEX(output, i, j) = OP(MATRIX_INDEX(input, i, j), EXTRA_ARG_1, EXTRA_ARG_2); \
+            } \
+        } \
+    } \
+    else { \
+        Tensor input_view, output_view; \
+        Indexer indices[MAX_TENSOR_DIM]; \
+        for (int i = 0; i < input->dim; i++) { \
+            indices[i].isRange = true; \
+            indices[i].start = 0; \
+            indices[i].end = input->sizes[i]; \
+        } \
+        for (int i = 0; i < input->sizes[0]; i++) { \
+            indices[0].isRange = false; \
+            indices[0].start = i; \
+            init_view(input, indices, &input_view); \
+            init_view(output, indices, &output_view); \
+            FUNCTION_NAME(&input_view, &output_view, EXTRA_ARG_1, EXTRA_ARG_2); \
+        } \
+    }
+
 // create and fill with zeros
 Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
     Tensor *result = malloc(sizeof(Tensor));
@@ -29,19 +127,24 @@ Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
     return result;
 }
 
-// create from pointers
 // tbd: add asserts to sanitize user inputs
-Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage) {
-    Tensor *result = malloc(sizeof(Tensor));
-    if (!result) {
-        return NULL;
-    }
+// init already allocated tensor
+void init_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage, Tensor *result) {
     result->dim = dim;
     for (int i = 0; i < dim; i++) {
         result->sizes[i] = sizes[i];
         result->strides[i] = strides[i];
     }
     result->storage = storage;
+}
+
+// alloc new tensor
+Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage) {
+    Tensor *result = malloc(sizeof(Tensor));
+    if (!result) {
+        return NULL;
+    }
+    init_tensor(dim, sizes, strides, storage, result);
     return result;
 }
 
@@ -107,22 +210,30 @@ Tensor *create_identity(unsigned int dim, unsigned int *sizes) {
     return result;
 }
 
-Tensor *get_view(Tensor *t, Indexer *indices) {
-    unsigned int new_dim = 0;
-    unsigned int sizes[MAX_TENSOR_DIM];
-    unsigned int strides[MAX_TENSOR_DIM];
-    float *storage = t->storage;
+void init_view(Tensor *t, Indexer *indices, Tensor *output) {
+    output->dim = 0;
+    output->storage = t->storage;
     unsigned int current_index = 0;
     for (unsigned int i = 0; i < t->dim; i++) {
         if (indices[i].isRange) {
-            new_dim++;
-            sizes[current_index] = indices[i].end - indices[i].start;
-            strides[current_index] = t->strides[i];
+            output->dim++;
+            output->sizes[current_index] = indices[i].end - indices[i].start;
+            output->strides[current_index] = t->strides[i];
             current_index++;
         }
-        storage += indices[i].start * t->strides[i];
+        output->storage += indices[i].start * t->strides[i];
     }
-    return create_tensor(new_dim, sizes, strides, storage);
+}
+
+// tbd: rename this "create_view" so that naming is more consistent
+// with other "create" operations representing allocs
+Tensor *get_view(Tensor *t, Indexer *indices) {
+    Tensor *result = malloc(sizeof(Tensor));
+    if (!result) {
+        return NULL;
+    }
+    init_view(t, indices, result);
+    return result;
 }
 
 void free_tensor(Tensor *t, bool free_storage) {
@@ -189,6 +300,7 @@ void matrix_multiply(Tensor *left, Tensor *right, Tensor *output) {
 
 // do not support implicit broadcasting
 void add(Tensor *input_1, Tensor *input_2, Tensor *output) {
+    /*
     assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
     assert(
             (input_1->sizes[0] == input_2->sizes[0]) && (input_1->sizes[1] == input_2->sizes[1]) &&
@@ -202,11 +314,13 @@ void add(Tensor *input_1, Tensor *input_2, Tensor *output) {
                 *(input_2->storage + i * input_2->strides[0] + j * input_2->strides[1]);
         }
     }
+    */
+    ELEMWISE_BINARY_OP(add, ADD)
 }
 
 
 void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output) {
-    assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
+    /*assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
     assert(
             (input_1->sizes[0] == input_2->sizes[0]) && (input_1->sizes[1] == input_2->sizes[1]) &&
             (input_1->sizes[0] == output->sizes[0]) && (input_1->sizes[1] == output->sizes[1])
@@ -217,7 +331,8 @@ void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output) {
                 (*(input_1->storage + i * input_1->strides[0] + j * input_1->strides[1])) *
                 (*(input_2->storage + i * input_2->strides[0] + j * input_2->strides[1]));
         }
-    }
+    }*/
+    ELEMWISE_BINARY_OP(elemwise_multiply, MULTIPLY)
 }
 
 void column_sum(Tensor *input, Tensor *output) {
@@ -232,7 +347,8 @@ void column_sum(Tensor *input, Tensor *output) {
 }
 
 // currently only supports matrices (2d) since we don't need more
-void tanh_tensor(Tensor *input, Tensor *output) {
+void tanh_tensor_helper(Tensor *input, Tensor *output, void *_unused_1, void *_unused_2) {
+    /*
     assert((input->dim == 2) && (output->dim == 2));
     assert((input->sizes[0] == output->sizes[0]) && (input->sizes[1] == output->sizes[1]));
     for (unsigned int i = 0; i < input->sizes[0]; i++) {
@@ -246,9 +362,15 @@ void tanh_tensor(Tensor *input, Tensor *output) {
             );
         }
     }
+    */
+    ELEMWISE_UNARY_OP(tanh_tensor_helper, TANH, _unused_1, _unused_2)
 }
 
-// todo: inline this
+void tanh_tensor(Tensor *input, Tensor*output) {
+    tanh_tensor_helper(input, output, NULL, NULL);
+}
+
+// todo: inline this (since ANSI C doesn't have inline functions, use a macro)
 float polynomial(float x, float *coefficients, unsigned int degree) {
     float output = coefficients[0];
     for (int i = 1; i <= degree; i++) {
@@ -258,7 +380,7 @@ float polynomial(float x, float *coefficients, unsigned int degree) {
 }
 
 void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, unsigned int degree) {
-    assert((input->dim == 2) && (output->dim == 2));
+    /* assert((input->dim == 2) && (output->dim == 2));
     assert((input->sizes[0] == output->sizes[0]) && (input->sizes[1] == output->sizes[1]));
     for (unsigned int i = 0; i < input->sizes[0]; i++) {
         for (unsigned int j = 0; j < input->sizes[1]; j++) {
@@ -270,7 +392,8 @@ void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, uns
                 )
             );
         }
-    }
+    } */
+    ELEMWISE_UNARY_OP(elemwise_polynomial, POLYNOMIAL, coefficients, degree)
 }
 
 void transpose(Tensor *input, Tensor *output) {

@@ -23,8 +23,10 @@ typedef struct Indexer {
 Tensor *create_zero(unsigned int dim, unsigned int *sizes);
 
 // create from pointers
-// tbd: check safety
-// Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage);
+// tbd: make this robust to bad user inputs (more asserts)
+void init_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage, Tensor *result);
+
+Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage);
 
 float *get_ptr(Tensor *t, unsigned int *indices);
 
@@ -32,27 +34,28 @@ void set_index(Tensor *t, unsigned int *indices, float val);
 
 Tensor *create_identity(unsigned int dim, unsigned int *sizes);
 
+void init_view(Tensor *input, Indexer *indices, Tensor *output);
+
 Tensor *get_view(Tensor *t, Indexer *indices);
 
 void free_tensor(Tensor *t, bool free_storage);
 
 void print_tensor(Tensor *t);
 
-Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage);
-
 // matrix multiply - only for 2d right now
 void matrix_multiply(Tensor *left, Tensor *right, Tensor *output);
 
-void add(Tensor *input_1, Tensor *input_2, Tensor *output);
-
-void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output);
-
-// only for 2d right now
+// only for 2d right now - unary
 void column_sum(Tensor *input, Tensor *output);
 
 void tanh_tensor(Tensor *input, Tensor *output);
 
 void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, unsigned int degree);
+
+// only for 2d right now - binary
+void add(Tensor *input_1, Tensor *input_2, Tensor *output);
+
+void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output);
 
 // default behavior: transposes the last two dimensions of the input tensor
 // tbd: if needed later on, add two arguments to optionally specify which dimensions to transpose
