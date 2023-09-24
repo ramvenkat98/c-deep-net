@@ -4,9 +4,17 @@
 #include "tensor.h"
 #include <math.h>
 
-#define VECTOR_INDEX(x, i) (*((x)->storage + (i) * (x)->strides[0]))
-#define MATRIX_INDEX(x, i, j) (*((x)->storage + (i) * (x)->strides[0] + (j) * (x)->strides[1]))
+#define VECTOR_INDEX(x, i) (*((x)->storage + ((int)i) * (x)->strides[0]))
+#define MATRIX_INDEX(x, i, j) (*((x)->storage + ((int)i) * (x)->strides[0] + ((int)j) * (x)->strides[1]))
+#define RANK_4_TENSOR_INDEX_PTR(x, i, j, k, l) ( \
+        (x)->storage + \
+        ((int)i) * (x)->strides[0] + \
+        ((int)j) * (x)->strides[1] + \
+        ((int)k) * (x)->strides[2] + \
+        ((int)l) * (x)->strides[3] \
+)
 
+// tbd: move from float to double
 // tbd: add tests for >2d for new macros
 // tbd: verify macro correctness and verify that we're following proper conventions before deleting previous
 // non-macro implementations
@@ -18,7 +26,7 @@
 
 // we're strictly sticking to ANSI C, which doesn't contain variadic macros so we need these extra args
 // in our macro definition
-#define TANH(x, _arg_1, _arg_2) (tanh(x))
+#define TANH(x, _arg_1, _arg_2) ((float)(tanh(x)))
 #define POLYNOMIAL(x, coefficients, degree) (polynomial(x, coefficients, degree))
 
 // assumption: input_1, input_2, and output are already wellformed tensors
@@ -56,7 +64,7 @@
         } \
         for (int i = 0; i < input_1->sizes[0]; i++) { \
             indices[0].isRange = false; \
-            indices[0].start = i; \
+            indices[0].start = (unsigned int)i; \
             init_view(input_1, indices, &input_1_view); \
             init_view(input_2, indices, &input_2_view); \
             init_view(output, indices, &output_view); \
@@ -95,7 +103,7 @@
         } \
         for (int i = 0; i < input->sizes[0]; i++) { \
             indices[0].isRange = false; \
-            indices[0].start = i; \
+            indices[0].start = (unsigned int)i; \
             init_view(input, indices, &input_view); \
             init_view(output, indices, &output_view); \
             FUNCTION_NAME(&input_view, &output_view, EXTRA_ARG_1, EXTRA_ARG_2); \
@@ -119,7 +127,7 @@ Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
     unsigned int current_size = total_size;
     for (int i = 0; i < dim; i++) {
         current_size /= sizes[i];
-        result->strides[i] = current_size;
+        result->strides[i] = (int)current_size;
     }
     assert(current_size == 1);
     float *storage = calloc(total_size, sizeof(float));
@@ -129,7 +137,7 @@ Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
 
 // tbd: add asserts to sanitize user inputs
 // init already allocated tensor
-void init_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage, Tensor *result) {
+void init_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage, Tensor *result) {
     result->dim = dim;
     for (int i = 0; i < dim; i++) {
         result->sizes[i] = sizes[i];
@@ -139,7 +147,7 @@ void init_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, f
 }
 
 // alloc new tensor
-Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage) {
+Tensor *create_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage) {
     Tensor *result = malloc(sizeof(Tensor));
     if (!result) {
         return NULL;
@@ -181,10 +189,10 @@ void init_from_normal_distribution(double mean, double stddev, float *storage, u
 }
 
 float *get_ptr(Tensor *t, unsigned int *indices) {
-    unsigned int position = 0;
+    int position = 0;
     for (int i = 0; i < t->dim; i++) {
         assert(indices[i] < t->sizes[i]);
-        position += indices[i] * t->strides[i];
+        position += ((int)indices[i]) * t->strides[i];
     }
     return t->storage + position;
 }
@@ -202,7 +210,7 @@ Tensor *create_identity(unsigned int dim, unsigned int *sizes) {
         return NULL;
     }
     unsigned int indices[2];
-    for (int i = 0; i < sizes[0]; i++) {
+    for (unsigned int i = 0; i < sizes[0]; i++) {
         indices[0] = i;
         indices[1] = i;
         set_index(result, indices, 1.0);
@@ -221,7 +229,7 @@ void init_view(Tensor *t, Indexer *indices, Tensor *output) {
             output->strides[current_index] = t->strides[i];
             current_index++;
         }
-        output->storage += indices[i].start * t->strides[i];
+        output->storage += ((int)indices[i].start) * t->strides[i];
     }
 }
 
@@ -244,7 +252,7 @@ void free_tensor(Tensor *t, bool free_storage) {
 }
 
 // tbd: get this to properly align each position within a cell of specified width
-void print_tensor_helper(float *current_position, unsigned int remaining_dim, unsigned int *remaining_strides, unsigned int *remaining_sizes, int indent, bool is_last_element) {
+void print_tensor_helper(float *current_position, unsigned int remaining_dim, int *remaining_strides, unsigned int *remaining_sizes, int indent, bool is_last_element) {
     if (remaining_dim == 0) {
         printf("%f", *current_position);
         if (!is_last_element) {
@@ -252,7 +260,7 @@ void print_tensor_helper(float *current_position, unsigned int remaining_dim, un
         }
         return;
     }
-    unsigned int whitespace = indent * PRINT_INDENT;
+    unsigned int whitespace = ((unsigned int)indent) * PRINT_INDENT;
     char indent_string[whitespace + 1];
     indent_string[whitespace] = '\0';
     for (int i = 0; i < whitespace; i++) {
@@ -261,7 +269,7 @@ void print_tensor_helper(float *current_position, unsigned int remaining_dim, un
     printf("\n%s", indent_string);
     printf("[");
     for (unsigned int i = 0; i < remaining_sizes[0]; i++) {
-        print_tensor_helper(current_position + i * remaining_strides[0], remaining_dim - 1, remaining_strides + 1, remaining_sizes + 1, indent + 1, i == remaining_sizes[0] - 1);
+        print_tensor_helper(current_position + ((int)i) * remaining_strides[0], remaining_dim - 1, remaining_strides + 1, remaining_sizes + 1, indent + 1, i == remaining_sizes[0] - 1);
     }
     if (remaining_dim > 1) {
         printf("\n%s", indent_string);
@@ -284,11 +292,11 @@ void print_tensor(Tensor *t) {
 void matrix_multiply(Tensor *left, Tensor *right, Tensor *output) {
     assert((left->dim == 2) && (right->dim == 2) && (output->dim == 2));
     assert((output->sizes[0] == left->sizes[0]) && (output->sizes[1] == right->sizes[1]) && (left->sizes[1] == right->sizes[0]));
-    output->strides[0] = output->sizes[1];
-    output->strides[1] = 1;
+    output->strides[0] = (int)output->sizes[1];
+    output->strides[1] = (int)1;
     for (int i = 0; i < output->sizes[0]; i++) {
         for (int j = 0; j < output->sizes[1]; j++) {
-            output->storage[i * output->strides[0] + j] = 0;
+            output->storage[((int)i) * output->strides[0] + j] = 0;
             for (int k = 0; k < left->sizes[1]; k++) {
                 output->storage[i * output->strides[0] + j] +=
                     left->storage[i * left->strides[0] + k * left->strides[1]] *
@@ -338,9 +346,9 @@ void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output) {
 void column_sum(Tensor *input, Tensor *output) {
     assert((input->dim == 2) && (output->dim == 1));
     // tbd: this is pretty cache-unfriendly
-    for (unsigned int j = 0; j < input->sizes[1]; j++) {
+    for (int j = 0; j < (int)(input->sizes[1]); j++) {
         *(output->storage + j * output->strides[0]) = 0;
-        for (unsigned int i = 0; i < input->sizes[0]; i++) {
+        for (int i = 0; i < (int)(input->sizes[0]); i++) {
             *(output->storage + j * output->strides[0]) += *(input->storage + i * input->strides[0] + j * input->strides[1]);
         }
     }
@@ -374,7 +382,7 @@ void tanh_tensor(Tensor *input, Tensor*output) {
 float polynomial(float x, float *coefficients, unsigned int degree) {
     float output = coefficients[0];
     for (int i = 1; i <= degree; i++) {
-        output += pow(x, i) * coefficients[i];
+        output += (float)(pow(x, i)) * coefficients[i];
     }
     return output;
 }
@@ -410,11 +418,22 @@ void transpose(Tensor *input, Tensor *output) {
     output->storage = input->storage;
 }
 
+void flip(Tensor *input, Tensor *output) {
+    output->dim = input->dim;
+    float *storage = input->storage;
+    for (int i = 0; i < input->dim; i++) {
+        output->sizes[i] = input->sizes[i];
+        output->strides[i] = -input->strides[i];
+        storage += (int)(input->sizes[i] - 1) * input->strides[i];
+    }
+    output->storage = storage;
+}
+
 bool broadcast_to(Tensor *input, unsigned int dim, unsigned int* sizes, Tensor *output) {
     assert(input->dim <= dim);
     output->dim = dim;
     output->storage = input->storage;
-    for (int i = 0; i < output->dim; i++) {
+    for (unsigned int i = 0; i < output->dim; i++) {
         output->sizes[i] = sizes[i];
         // if the second condition is true and sizes[i] == 1, it doesn't matter what value strides[i] is -
         // so setting it to 0 is fine in that edge case too.
@@ -430,4 +449,89 @@ bool broadcast_to(Tensor *input, unsigned int dim, unsigned int* sizes, Tensor *
         }
     }
     return true;
+}
+
+unsigned int get_convolution_output_size(
+    unsigned int n,
+    unsigned int filter_size,
+    unsigned int stride,
+    unsigned int l_padding,
+    unsigned int r_padding,
+    unsigned int dilation
+) {
+    return (n + 2 * l_padding - (filter_size * dilation - (dilation - 1))) / stride + 1;
+}
+
+
+void convolve(
+    Tensor *input, // m x n x n x input_channels
+    Tensor *weights, // filter_size x filter_size x input_channels x output_channels
+    unsigned int stride,
+    unsigned int l_padding,
+    unsigned int r_padding,
+    unsigned int dilation,
+    float pad_with,
+    Tensor *output // m x n_output x n_output x output_channels
+) {
+    assert(input->dim == 4 && weights->dim == 4 && output->dim == 4);
+    unsigned int m = input->sizes[0];
+    assert(output->sizes[0] == m);
+    unsigned int n = input->sizes[1];
+    assert(input->sizes[2] == n);
+    unsigned int input_channels = input->sizes[3];
+    assert(weights->sizes[2] == input_channels);
+    unsigned int filter_size = weights->sizes[0];
+    assert(weights->sizes[1] == filter_size);
+    unsigned int output_channels = weights->sizes[3];
+    assert(output->sizes[3] == output_channels);
+    unsigned int n_output = get_convolution_output_size(
+        n, filter_size, stride, l_padding, r_padding, dilation
+    );
+    assert(output->sizes[1] == n_output && output->sizes[2] == n_output);
+    for (unsigned int i = 0; i < m; i++) {
+        int current_top = -(int)l_padding;
+        for (unsigned int j = 0; j < n_output; j++) {
+            int current_left = -(int)l_padding;
+            for (unsigned int k = 0; k < n_output; k++) {
+                for (unsigned int l = 0; l < output_channels; l++) {
+                    float *ptr = RANK_4_TENSOR_INDEX_PTR(output, i, j, k, l);
+                    *ptr = 0.0f;
+                    int current_vertical_index = current_top;
+                    for (unsigned int a = 0; a < filter_size; a++) {
+                        int current_horizontal_index = current_left;
+                        for (unsigned int b = 0; b < filter_size; b++) {
+                            for (unsigned int c = 0; c < input_channels; c++) {
+                                // if (k == n_output - 1)
+                                //     printf("i = %u, j = %u, k = %u, l = %u, a = %u, b = %u, c = %u, current top = %d, current left = %d, current_vertical_index = %d, current_horizontal_index = %d\n",
+                                //         i, j, k, l, a, b, c, current_top, current_left, current_vertical_index, current_horizontal_index
+                                //     );
+                                float weight = *RANK_4_TENSOR_INDEX_PTR(weights, a, b, c, l);
+                                if ((current_vertical_index < 0) || (current_horizontal_index < 0)) {
+                                    // if (k == n_output - 1)
+                                    //     printf("Condition 1, adding %f\n", pad_with * weight);
+                                    *ptr += pad_with * weight;
+                                }
+                                else if ((current_vertical_index >= input->sizes[1]) || (current_horizontal_index >= input->sizes[2])) {
+                                    // if (k == n_output - 1)
+                                    //     printf("Condition 2, adding %f\n", pad_with * weight);
+                                    // verify that padding is sufficient
+                                    assert((current_vertical_index - (int)input->sizes[1] < (int)r_padding) && (current_horizontal_index - (int)input->sizes[2] < (int)r_padding));
+                                    *ptr += pad_with * weight;
+                                }
+                                else {
+                                    // if (k == n_output - 1)
+                                    //     printf("Condition 3, adding %f\n", (*RANK_4_TENSOR_INDEX_PTR(input, i, current_vertical_index, current_horizontal_index, c)) * weight);
+                                    *ptr += (*RANK_4_TENSOR_INDEX_PTR(input, i, current_vertical_index, current_horizontal_index, c)) * weight;
+                                }
+                            }
+                            current_horizontal_index += (int)dilation;
+                        }
+                        current_vertical_index += (int)dilation;
+                    }
+                }
+                current_left += (int)stride;
+            }
+            current_top += (int)stride;
+        }
+    }
 }

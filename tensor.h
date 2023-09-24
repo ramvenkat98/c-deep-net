@@ -9,7 +9,7 @@
 typedef struct Tensor {
     unsigned int dim;
     unsigned int sizes[MAX_TENSOR_DIM];
-    unsigned int strides[MAX_TENSOR_DIM];
+    int strides[MAX_TENSOR_DIM];
     float *storage;
 } Tensor;
 
@@ -24,9 +24,9 @@ Tensor *create_zero(unsigned int dim, unsigned int *sizes);
 
 // create from pointers
 // tbd: make this robust to bad user inputs (more asserts)
-void init_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage, Tensor *result);
+void init_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage, Tensor *result);
 
-Tensor *create_tensor(unsigned int dim, unsigned int *sizes, unsigned int *strides, float *storage);
+Tensor *create_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage);
 
 float *get_ptr(Tensor *t, unsigned int *indices);
 
@@ -61,9 +61,31 @@ void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output);
 // tbd: if needed later on, add two arguments to optionally specify which dimensions to transpose
 void transpose(Tensor *input, Tensor *output);
 
+void flip(Tensor *input, Tensor *output);
+
 bool broadcast_to(Tensor *input, unsigned int dim, unsigned int *sizes, Tensor *output);
 
 // special function that directly uses a (contiguous) tensor's storage to set each cell to a random value
 // specified from a normal distribution
 void init_from_normal_distribution(double mean, double stddev, float *storage, unsigned int total_size);
+
+unsigned int get_convolution_output_size(
+    unsigned int n,
+    unsigned int filter_size,
+    unsigned int stride,
+    unsigned int l_padding,
+    unsigned int r_padding,
+    unsigned int dilation
+);
+
+void convolve(
+    Tensor *input, // m x n x n x input_channels
+    Tensor *weights, // filter_size x filter_size x input_channels x output_channels
+    unsigned int stride,
+    unsigned int l_padding,
+    unsigned int r_padding,
+    unsigned int dilation,
+    float pad_with,
+    Tensor *output // m x n_output x n_output x output_channels
+);
 #endif

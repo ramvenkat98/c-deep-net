@@ -44,4 +44,45 @@ void deallocate_tanh_layer_storage(TanhLayer *layer);
 void compute_tanh_outputs(TanhLayer *layer, Tensor *X);
 
 void compute_tanh_gradients(TanhLayer *layer, Tensor *dOutput, Tensor *X);
+
+// restricted to depth 1 for now
+typedef struct ConvLayer {
+    // inputs expected to have dimension m x n x n x input_channels
+    unsigned int m;
+    unsigned int n; // same width and height
+    unsigned int input_channels;
+    unsigned int output_channels; // num filters
+    unsigned int filter_size;
+    unsigned int stride;
+    unsigned int l_padding; // left padding is also top padding
+    unsigned int r_padding; // right padding is also bottom padding
+    float pad_with;
+    unsigned int dilation;
+    Tensor *W; // weights: (filter_size x filter_size x input_channels x output_channels)
+    // output image dimension should be n_output = (n + 2 x padding - (filter_size x (dilation + 1) - dilation)) / stride + 1
+    Tensor *output; // (m x n_output x n_output x output_channels)
+    Tensor *dW;
+    Tensor *dX;
+} ConvLayer;
+
+bool allocate_conv_layer_storage(
+    ConvLayer *layer,
+    unsigned int m,
+    unsigned int n,
+    unsigned int input_channels,
+    unsigned int output_channels,
+    unsigned int filter_size,
+    unsigned int stride,
+    unsigned int l_padding,
+    unsigned int r_padding,
+    float pad_with,
+    unsigned int dilation
+);
+
+void deallocate_conv_layer_storage(ConvLayer *layer);
+
+void compute_conv_outputs(ConvLayer *layer, Tensor *X);
+
+void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X);
+
 #endif
