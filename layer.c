@@ -1,5 +1,8 @@
 #include "layer.h"
 #include <assert.h>
+#include <stdio.h>
+
+#define INDEXER(i, j, k) (Indexer){.isRange = i, .start = j, .end = k}
 
 bool allocate_layer_storage(FullyConnectedLinearLayer *layer, unsigned int m, unsigned int n, unsigned int k) {
     layer->m = m;
@@ -67,7 +70,7 @@ void compute_tanh_gradients(TanhLayer *layer, Tensor *dOutput, Tensor *X) {
     elemwise_multiply(layer->dX, dOutput, layer->dX);
 }
 
-bool allocate_convh_layer_storage(
+bool allocate_conv_layer_storage(
     ConvLayer *layer,
     unsigned int m,
     unsigned int n,
@@ -101,7 +104,7 @@ bool allocate_convh_layer_storage(
     return (layer->W && layer->output && layer->dW && layer->dX);
 }
 
-void deallocate_convh_layer_storage(ConvLayer *layer) {
+void deallocate_conv_layer_storage(ConvLayer *layer) {
     free_tensor(layer->W, true);
     free_tensor(layer->output, true);
     free_tensor(layer->dW, true);
@@ -111,7 +114,7 @@ void deallocate_convh_layer_storage(ConvLayer *layer) {
 void compute_conv_outputs(ConvLayer *layer, Tensor *X) {
     convolve(
         X, layer->W, layer->stride, layer->l_padding, layer->r_padding,
-        layer->dilation, layer->pad_with, layer->output
+        layer->dilation, layer->pad_with, false, layer->output
     );
 }
 
@@ -125,21 +128,75 @@ void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
     for (int i = 0; i < 4; i++) {
         assert(layer->output->sizes[i] == dOutput->sizes[i]);
     }
-    convolve(
-        X, dOutput, layer->dilation, layer->l_padding, layer->r_padding,
-        layer->stride, 0.0f, layer->dW
-    );
+    Tensor dW_swapped, dOutput_swapped;
+    unsigned int dW_axes_swaps[4] = {1, 2, 0, 1};
+    unsigned int dOutput_axes_swaps[4] = {0, 1, 1, 2};
+    permute_axes(layer->dW, &dW_swapped, dW_axes_swaps, 4);
+    permute_axes(dOutput, &dOutput_swapped, dOutput_axes_swaps, 4);
+    for (unsigned int i = 0; i < layer->input_channels; i++) {
+        for (unsigned int j = 0; j < layer->output_channels; j++) {
+            for (unsigned int k = 0; k < layer->m; k++) {
+                bool is_first = (i + j + k == 0); // reset gradients on the first one
+                Tensor dW_view, X_view, dOutput_view;
+                Indexer indices[4];
+                indices[0] = INDEXER(true, i, i + 1);
+                indices[1] = INDEXER(true, 0u, dW_swapped.sizes[1]);
+                indices[2] = INDEXER(true, 0u, dW_swapped.sizes[2]);
+                indices[3] = INDEXER(true, j, j + 1);
+                init_view(&dW_swapped, indices, &dW_view);
+                indices[0] = INDEXER(true, 0u, dOutput_swapped.sizes[0]);
+                indices[1] = INDEXER(true, 0u, dOutput_swapped.sizes[1]);
+                indices[2] = INDEXER(true, k, k + 1);
+                indices[3] = INDEXER(true, j, j + 1);
+                init_view(&dOutput_swapped, indices, &dOutput_view);
+                indices[0] = INDEXER(true, k, k + 1);
+                indices[1] = INDEXER(true, 0u, X->sizes[1]);
+                indices[2] = INDEXER(true, 0u, X->sizes[2]);
+                indices[3] = INDEXER(true, i, i + 1);
+                init_view(X, indices, &X_view);
+                convolve(
+                    &X_view, &dOutput_view, layer->dilation, layer->l_padding, layer->r_padding,
+                    layer->stride, 0.0f, !is_first, &dW_view
+                );
+            }
+        }
+    }
     unsigned int n_output = dOutput->sizes[1];
     unsigned l_padding_dW_convolution = layer->stride * (n_output - 1) - layer->l_padding;
     unsigned r_padding_dW_convolution = (layer->n - 1) + 1 + layer->stride * (n_output - 1) - (l_padding_dW_convolution
         + (layer->filter_size - 1) * layer->dilation + 1);
-    Tensor flipped_dOutput;
-    flip(dOutput, &flipped_dOutput); // just creates a view
+    Tensor W_swapped;
+    permute_axes(layer->W, &W_swapped, dW_axes_swaps, 4);
     if (layer->dilation == 1) {
-        convolve(
-            layer->W, &flipped_dOutput, layer->dilation, l_padding_dW_convolution, r_padding_dW_convolution,
-            1, 0.0f, layer->dX
-        );
+        for (unsigned int i = 0; i < layer->input_channels; i++) {
+            for (unsigned int j = 0; j < layer->output_channels; j++) {
+                for (unsigned int k = 0; k < layer->m; k++) {
+                    bool is_first = (i + j + k == 0); // as above, reset on the first iteration
+                    Tensor W_view, dX_view, dOutput_view, dOutput_flipped_view;
+                    Indexer indices[4];
+                    indices[0] = INDEXER(true, i, i + 1);
+                    indices[1] = INDEXER(true, 0u, W_swapped.sizes[1]);
+                    indices[2] = INDEXER(true, 0u, W_swapped.sizes[2]);
+                    indices[3] = INDEXER(true, j, j + 1);
+                    init_view(&W_swapped, indices, &W_view);
+                    indices[0] = INDEXER(true, 0u, dOutput_swapped.sizes[0]);
+                    indices[1] = INDEXER(true, 0u, dOutput_swapped.sizes[1]);
+                    indices[2] = INDEXER(true, k, k + 1);
+                    indices[3] = INDEXER(true, j, j + 1);
+                    init_view(&dOutput_swapped, indices, &dOutput_view);
+                    flip(&dOutput_view, &dOutput_flipped_view);
+                    indices[0] = INDEXER(true, k, k + 1);
+                    indices[1] = INDEXER(true, 0u, layer->dX->sizes[1]);
+                    indices[2] = INDEXER(true, 0u, layer->dX->sizes[2]);
+                    indices[3] = INDEXER(true, i, i + 1);
+                    init_view(layer->dX, indices, &dX_view);
+                    convolve(
+                        &W_view, &dOutput_flipped_view, 1, l_padding_dW_convolution, r_padding_dW_convolution,
+                        layer->stride, 0.0f, !is_first, &dX_view
+                    );
+                }
+            }
+        }
     }
     else {
         assert(false); // We should not go down this codepath

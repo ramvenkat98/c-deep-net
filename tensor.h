@@ -22,23 +22,27 @@ typedef struct Indexer {
 // create and fill with zeros
 Tensor *create_zero(unsigned int dim, unsigned int *sizes);
 
+Tensor *create_identity(unsigned int dim, unsigned int *sizes);
+
+Tensor *create_random_normal(unsigned int dim, unsigned int *sizes, double mean, double stddev);
+
+Tensor *create_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage);
+
 // create from pointers
 // tbd: make this robust to bad user inputs (more asserts)
 void init_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage, Tensor *result);
 
-Tensor *create_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage);
-
 float *get_ptr(Tensor *t, unsigned int *indices);
 
 void set_index(Tensor *t, unsigned int *indices, float val);
-
-Tensor *create_identity(unsigned int dim, unsigned int *sizes);
 
 void init_view(Tensor *input, Indexer *indices, Tensor *output);
 
 Tensor *get_view(Tensor *t, Indexer *indices);
 
 void free_tensor(Tensor *t, bool free_storage);
+
+void print_sizes(Tensor *t);
 
 void print_tensor(Tensor *t);
 
@@ -63,6 +67,8 @@ void transpose(Tensor *input, Tensor *output);
 
 void flip(Tensor *input, Tensor *output);
 
+void permute_axes(Tensor *input, Tensor *output, unsigned int *swaps, unsigned int swap_len);
+
 bool broadcast_to(Tensor *input, unsigned int dim, unsigned int *sizes, Tensor *output);
 
 // special function that directly uses a (contiguous) tensor's storage to set each cell to a random value
@@ -86,6 +92,7 @@ void convolve(
     unsigned int r_padding,
     unsigned int dilation,
     float pad_with,
+    bool add_instead_of_replace,
     Tensor *output // m x n_output x n_output x output_channels
 );
 #endif

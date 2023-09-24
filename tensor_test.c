@@ -317,7 +317,7 @@ void test_convolution() {
     // init_from_normal_distribution(5.0, 2.0, input->storage, m * n * n * input_channels);
     // init_from_normal_distribution(-1.0, 1.0, weights->storage, filter_size * filter_size * input_channels * output_channels);
     init_from_normal_distribution(-1.0, 1.0, output->storage, m * n_output * n_output * output_channels);
-    convolve(input, weights, stride, l_padding, r_padding, dilation, pad_with, output);
+    convolve(input, weights, stride, l_padding, r_padding, dilation, pad_with, false, output);
     print_tensor(input);
     print_tensor(weights);
     print_tensor(output);
@@ -339,4 +339,5 @@ int main(int argc, char* argv[]) {
     test_tanh_tensor();
     test_elemwise_polynomial();
     test_convolution();
+   // tbd: write test cases for permute_axes
 }

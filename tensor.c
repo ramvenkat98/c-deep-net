@@ -218,6 +218,16 @@ Tensor *create_identity(unsigned int dim, unsigned int *sizes) {
     return result;
 }
 
+Tensor *create_random_normal(unsigned int dim, unsigned int *sizes, double mean, double stddev) {
+    Tensor *result = create_zero(dim, sizes);
+    unsigned int total_size = 1;
+    for (unsigned int i = 0; i < dim; i++) {
+        total_size *= sizes[i];
+    }
+    init_from_normal_distribution(mean, stddev, result->storage, total_size);
+    return result;
+}
+
 void init_view(Tensor *t, Indexer *indices, Tensor *output) {
     output->dim = 0;
     output->storage = t->storage;
@@ -278,6 +288,14 @@ void print_tensor_helper(float *current_position, unsigned int remaining_dim, in
     if (!is_last_element) {
         printf(",");
     }
+}
+
+void print_sizes(Tensor *t) {
+    printf("Tensor of dimension %u with sizes (", t->dim);
+    for (int i = 0; i < t->dim; i++) {
+        printf("%u, ", t->sizes[i]);
+    }
+    printf(")\n");
 }
 
 void print_tensor(Tensor *t) {
@@ -406,6 +424,7 @@ void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, uns
 
 void transpose(Tensor *input, Tensor *output) {
     output->dim = input->dim;
+    output->storage = input->storage;
     for (int i = 0; i < input->dim; i++) {
         output->sizes[i] = input->sizes[i];
         output->strides[i] = input->strides[i];
@@ -415,7 +434,26 @@ void transpose(Tensor *input, Tensor *output) {
     output->sizes[output->dim - 1] = input->sizes[output->dim - 2];
     output->strides[output->dim - 2] = input->strides[output->dim - 1];
     output->strides[output->dim - 1] = input->strides[output->dim - 2];
+}
+
+void permute_axes(Tensor *input, Tensor *output, unsigned int *swaps, unsigned int swap_len) {
+    // todo: factor this first part out into a method - duplicated code for copying
+    output->dim = input->dim;
     output->storage = input->storage;
+    for (int i = 0; i < input->dim; i++) {
+        output->sizes[i] = input->sizes[i];
+        output->strides[i] = input->strides[i];
+    }
+    for (int k = 0; k < swap_len; k += 2) {
+        unsigned int i = swaps[k];
+        unsigned int j = swaps[k + 1];
+        unsigned int sizes_i = output->sizes[i];
+        int strides_i = output->strides[i];
+        output->sizes[i] = output->sizes[j];
+        output->strides[i] = output->strides[j];
+        output->sizes[j] = sizes_i;
+        output->strides[j] = strides_i;
+    }
 }
 
 void flip(Tensor *input, Tensor *output) {
@@ -459,7 +497,7 @@ unsigned int get_convolution_output_size(
     unsigned int r_padding,
     unsigned int dilation
 ) {
-    return (n + 2 * l_padding - (filter_size * dilation - (dilation - 1))) / stride + 1;
+    return (n + l_padding + r_padding - (filter_size * dilation - (dilation - 1))) / stride + 1;
 }
 
 
@@ -471,6 +509,7 @@ void convolve(
     unsigned int r_padding,
     unsigned int dilation,
     float pad_with,
+    bool add_instead_of_replace,
     Tensor *output // m x n_output x n_output x output_channels
 ) {
     assert(input->dim == 4 && weights->dim == 4 && output->dim == 4);
@@ -495,7 +534,9 @@ void convolve(
             for (unsigned int k = 0; k < n_output; k++) {
                 for (unsigned int l = 0; l < output_channels; l++) {
                     float *ptr = RANK_4_TENSOR_INDEX_PTR(output, i, j, k, l);
-                    *ptr = 0.0f;
+                    if (!add_instead_of_replace) {
+                        *ptr = 0.0f;
+                    }
                     int current_vertical_index = current_top;
                     for (unsigned int a = 0; a < filter_size; a++) {
                         int current_horizontal_index = current_left;
