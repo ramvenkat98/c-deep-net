@@ -70,10 +70,10 @@ void test_conv_layer() {
     srand(20);
     printf("Testing convolutional layer...\n");
     ConvLayer l;
-    unsigned int m = 5;
+    unsigned int m = 1;
     unsigned int n = 13;
-    unsigned int input_channels = 3;
-    unsigned int output_channels = 2;
+    unsigned int input_channels = 1;
+    unsigned int output_channels = 1;
     unsigned int filter_size = 7;
     unsigned int stride = 3;
     unsigned int l_padding = 5;

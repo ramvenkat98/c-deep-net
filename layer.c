@@ -156,7 +156,7 @@ void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
                 init_view(X, indices, &X_view);
                 convolve(
                     &X_view, &dOutput_view, layer->dilation, layer->l_padding, layer->r_padding,
-                    layer->stride, 0.0f, !is_first, &dW_view
+                    layer->stride, layer->pad_with, !is_first, &dW_view
                 );
             }
         }
