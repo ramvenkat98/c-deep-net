@@ -1,9 +1,9 @@
 # c-deep-net
 A deep learning library implemented from scratch in ~ANSI~ C99 C, including a tensor manipulation library, a library for automatic differentiation, and a library for composing neural nets on top of those.
 ## Testing Workflow
-Compile tests with: `gcc -Wall -pedantic tensor.c tensor_test.c -o tensor_test.out`
-Check for memory leaks with: `leaks -atExit -- ./tensor_test.out`
-Also use the '-Wconversion' flag to catch bad implicit conversions (necessary especially since adding support for negative strides, which makes it a signed type).
+1. Tensor library: Compile tests with: `gcc -Wall -Wconversion -pedantic -std=c99 layer.c tensor.c tensor_test.c -o tensor_test.out`. Check for memory leaks with: `leaks -atExit -- ./tensor_test.out`. (We just use the '-Wconversion' flag to catch bad implicit conversions - necessary especially since adding support for negative strides, which makes it a signed type unlike the others).
+2. NN Library: Similarly, compile tests with `gcc -Wall -Wconversion -pedantic -std=c99 layer.c tensor.c layer_test.c -o layer_test.out` and check for memory leaks with `leaks -atExit -- ./layer_test.out`.
+3. Convolution Layer Pytorch Comparison Test: For the convolution layer, it is necessary to try a variety of large and small inputs to cover different cases, and it can get tedious to verify larger test cases by hand. So instead, we write a small script to enable us to compare outputs with equivalent commands in Pytorch. The way to do this is as follows. First, compile the test (after making any changes if necessary) with `gcc -Wall -pedantic -std=c99 layer.c tensor.c conv_layer_pytorch_comparison_test.c -o conv_layer_pytorch_comparison_test.out`. Then run the test and store the output in a file as follows: `./conv_layer_pytorch_comparison_test.out > conv_layer_pytorch_comparison_test_output.txt`. Then run the Python script to compare the output of the test with the equivalent Pytorch commands (e.g. using `python3 conv_layer_pytorch_comparison_test.py`).
 ## Progress
 1. Basic tensor library
    - Basic operations: Creation, views, indexing, freeing
