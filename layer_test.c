@@ -65,46 +65,10 @@ void test_tanh_layer() {
     printf("Tanh layer test finished\n");
 }
 
-void test_conv_layer() {
-    // Use a fixed number so that the test is reproducible
-    srand(20);
-    printf("Testing convolutional layer...\n");
-    ConvLayer l;
-    unsigned int m = 1;
-    unsigned int n = 13;
-    unsigned int input_channels = 1;
-    unsigned int output_channels = 1;
-    unsigned int filter_size = 7;
-    unsigned int stride = 3;
-    unsigned int l_padding = 5;
-    unsigned int r_padding = 1;
-    unsigned int dilation = 1;
-    unsigned int pad_with = 2.0;
-    allocate_conv_layer_storage(&l, m, n, input_channels, output_channels, filter_size, stride, l_padding, r_padding, pad_with, dilation);
-    unsigned int n_output = get_convolution_output_size(n, filter_size, stride, l_padding, r_padding, dilation);
-    printf("Output dim is %u\n", n_output);
-    unsigned int input_sizes[4] = {m, n, n, input_channels}; // 5, 13, 13, 3
-    unsigned int output_sizes[4] = {m, n_output, n_output, output_channels}; // 5, 5, 5, 2
-    Tensor *X = create_random_normal(4, input_sizes, 100.0, 50.0);
-    Tensor *dOutput = create_random_normal(4, output_sizes, 2.0, 3.0);
-    init_from_normal_distribution(3.0, 3.0, l.W->storage, filter_size * filter_size * input_channels * output_channels);
-    compute_conv_outputs(&l, X);
-    compute_conv_gradients(&l, dOutput, X);
-    print_tensor(X);
-    print_tensor(dOutput);
-    print_tensor(l.W);
-    print_tensor(l.output);
-    print_tensor(l.dW);
-    print_tensor(l.dX);
-    free_tensor(X, true);
-    free_tensor(dOutput, true);
-    deallocate_conv_layer_storage(&l);
-    printf("Convolutional layer test finished\n");
-}
-
 int main(int argc, char* argv[]) {
     test_linear_layer();
     test_tanh_layer();
-    test_conv_layer();
+    // For conv layer, we have a separate testing file with larger
+    // tests whose outputs we compare to Pytorch outputs
     return 0;
 }
