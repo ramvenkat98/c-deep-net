@@ -15,5 +15,6 @@ A deep learning library implemented from scratch in ~ANSI~ C99 C, including a te
 1. Testing - make it use expect tests (currently just manual print-based testing)
 2. E2E Demo with simple conv net
 3. Misc todo's and tbd's in code
-4. Clean up documentation
-5. Full auto-diff if we need it (not necessary at the moment)
+4. Better file structure isolating test files in one directory
+5. Clean up documentation
+6. Full auto-diff if we need it (not necessary at the moment)
