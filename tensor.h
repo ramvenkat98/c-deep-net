@@ -56,8 +56,10 @@ void tanh_tensor(Tensor *input, Tensor *output);
 
 void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, unsigned int degree);
 
-// only for 2d right now - binary
 void add(Tensor *input_1, Tensor *input_2, Tensor *output);
+
+// subtract after multiplying by coeff
+void subtract(Tensor *input_1, Tensor *input_2, float coeff, Tensor *output);
 
 void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output);
 
@@ -68,6 +70,9 @@ void transpose(Tensor *input, Tensor *output);
 void flip(Tensor *input, Tensor *output);
 
 void permute_axes(Tensor *input, Tensor *output, unsigned int *swaps, unsigned int swap_len);
+
+// assumes contiguous, do not use unless this is the case
+void reshape(Tensor *input, unsigned int *sizes, unsigned int dim, Tensor *output);
 
 bool broadcast_to(Tensor *input, unsigned int dim, unsigned int *sizes, Tensor *output);
 

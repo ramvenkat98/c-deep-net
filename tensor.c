@@ -21,8 +21,9 @@
 // tbd: enforce more naming consistency for clarity
 // (e.g. t vs input, result vs output, create_X vs get_X, elemwise_X, vs X_tensor)
 
-#define ADD(x, y) ((x) + (y))
-#define MULTIPLY(x, y) ((x) * (y))
+#define ADD(x, y, _arg_1) ((x) + (y))
+#define SUBTRACT(x, y, b) ((x) - (b) * (y))
+#define MULTIPLY(x, y, _arg_1) ((x) * (y))
 
 // we're strictly sticking to ANSI C, which doesn't contain variadic macros so we need these extra args
 // in our macro definition
@@ -31,7 +32,7 @@
 
 // assumption: input_1, input_2, and output are already wellformed tensors
 // note: special case for dim 2 is not necessary, but since that's our most common case, might as well make it fast
-#define ELEMWISE_BINARY_OP(FUNCTION_NAME, OP) \
+#define ELEMWISE_BINARY_OP(FUNCTION_NAME, OP, EXTRA_ARG_1) \
     assert((input_1->dim == input_2->dim) && (input_1->dim == output->dim)); \
     for (int i = 0; i < input_1->dim; i++) { \
         assert( \
@@ -40,17 +41,17 @@
          ); \
     } \
     if (input_1->dim == 0) { \
-        *(output->storage) = OP(*(input_1->storage), *(input_2->storage)); \
+        *(output->storage) = OP(*(input_1->storage), *(input_2->storage), EXTRA_ARG_1); \
     } \
     else if (input_1->dim == 1) { \
         for (int i = 0; i < input_1->sizes[0]; i++) { \
-            VECTOR_INDEX(output, i) = OP(VECTOR_INDEX(input_1, i), VECTOR_INDEX(input_2, i)); \
+            VECTOR_INDEX(output, i) = OP(VECTOR_INDEX(input_1, i), VECTOR_INDEX(input_2, i), EXTRA_ARG_1); \
         } \
     } \
     else if (input_1->dim == 2) { \
         for (int i = 0; i < input_1->sizes[0]; i++) { \
             for (int j = 0; j < input_1->sizes[1]; j++) { \
-                MATRIX_INDEX(output, i, j) = OP(MATRIX_INDEX(input_1, i, j), MATRIX_INDEX(input_2, i, j)); \
+                MATRIX_INDEX(output, i, j) = OP(MATRIX_INDEX(input_1, i, j), MATRIX_INDEX(input_2, i, j), EXTRA_ARG_1); \
             } \
         } \
     } \
@@ -68,7 +69,7 @@
             init_view(input_1, indices, &input_1_view); \
             init_view(input_2, indices, &input_2_view); \
             init_view(output, indices, &output_view); \
-            FUNCTION_NAME(&input_1_view, &input_2_view, &output_view); \
+            FUNCTION_NAME(&input_1_view, &input_2_view, EXTRA_ARG_1, &output_view); \
         } \
     }
 
@@ -324,6 +325,10 @@ void matrix_multiply(Tensor *left, Tensor *right, Tensor *output) {
     }
 }
 
+void add_helper(Tensor *input_1, Tensor *input_2, void *_unused_1, Tensor *output) {
+    ELEMWISE_BINARY_OP(add_helper, ADD, NULL)
+}
+
 // do not support implicit broadcasting
 void add(Tensor *input_1, Tensor *input_2, Tensor *output) {
     /*
@@ -341,9 +346,16 @@ void add(Tensor *input_1, Tensor *input_2, Tensor *output) {
         }
     }
     */
-    ELEMWISE_BINARY_OP(add, ADD)
+    add_helper(input_1, input_2, NULL, output);
 }
 
+void subtract(Tensor *input_1, Tensor *input_2, float coeff, Tensor *output) {
+    ELEMWISE_BINARY_OP(subtract, SUBTRACT, coeff)
+}
+
+void elemwise_multiply_helper(Tensor *input_1, Tensor *input_2, void *_unused_1, Tensor *output) {
+    ELEMWISE_BINARY_OP(elemwise_multiply_helper, MULTIPLY, NULL)
+}
 
 void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output) {
     /*assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
@@ -358,7 +370,7 @@ void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output) {
                 (*(input_2->storage + i * input_2->strides[0] + j * input_2->strides[1]));
         }
     }*/
-    ELEMWISE_BINARY_OP(elemwise_multiply, MULTIPLY)
+    elemwise_multiply_helper(input_1, input_2, NULL, output);
 }
 
 void column_sum(Tensor *input, Tensor *output) {
@@ -465,6 +477,30 @@ void flip(Tensor *input, Tensor *output) {
         storage += (int)(input->sizes[i] - 1) * input->strides[i];
     }
     output->storage = storage;
+}
+
+void reshape(Tensor *input, unsigned int *sizes, unsigned int dim, Tensor *output) {
+    unsigned int total_size = 1;
+    unsigned int input_total_size = 1;
+    // TBD: create a helper function for this later potentially, since it's nearly identical
+    // to the code used in creating a tensor
+    for (int i = 0; i < dim; i++) {
+        assert(sizes[i] > 0);
+        output->sizes[i] = sizes[i];
+        assert(total_size * sizes[i] / total_size == sizes[i]);
+        total_size *= sizes[i];
+    }
+    for (int i = 0; i < input->dim; i++) {
+        input_total_size *= input->sizes[i];
+    }
+    assert(total_size == input_total_size);
+    unsigned int current_size = total_size;
+    for (int i = 0; i < dim; i++) {
+        current_size /= sizes[i];
+        output->strides[i] = (int)current_size;
+    }
+    output->storage = input->storage;
+    output->dim = dim;
 }
 
 bool broadcast_to(Tensor *input, unsigned int dim, unsigned int* sizes, Tensor *output) {
