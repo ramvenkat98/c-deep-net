@@ -18,7 +18,7 @@ bool read_inputs(char *filename, Tensor **X, Tensor **Y) {
     }
     unsigned int sizes[4] = {1, IMAGE_SIZE, IMAGE_SIZE, 1};
     fscanf(file, "%u", sizes);
-    printf("Num lines is %u\n", sizes[0]);
+    // printf("Num lines is %u\n", sizes[0]);
     *X = create_zero(4, sizes);
     for (int i = 0; i < sizes[0] * sizes[1] * sizes[2]; i++) {
         fscanf(file, "%f", (*X)->storage + i);
@@ -63,7 +63,7 @@ void simple_tanh_regression(Tensor *X_tr, Tensor *Y_tr, Tensor *X_te, Tensor *Y_
     allocate_tanh_layer_storage(&t, m, k);
     Tensor *dOutput = create_zero(2, t.Z->sizes);
     for (unsigned int i = 0; i < epochs; i++) {
-        printf("Starting epoch %u...\n", i);
+        // printf("Starting epoch %u...\n", i);
         for (unsigned int j = 0; j < samples; j++) {
             Tensor x, y;
             Indexer x_indices[2] = {{true, j, j + 1}, {true, 0, IMAGE_SIZE * IMAGE_SIZE}};
@@ -75,13 +75,28 @@ void simple_tanh_regression(Tensor *X_tr, Tensor *Y_tr, Tensor *X_te, Tensor *Y_
             // gradient of MSE loss
             subtract(&y, t.Z, 1, dOutput);
             for (int i = 0; i < NUM_CLASSES; i++) {
-                dOutput->storage[i] *= -2;
+                // Note: I think we technically shouldn't divide by NUM_CLASSES, but anyway
+                // it's just a scalar factor, and it's meant to keep it consistent with the
+                // way the loss is defined in the repro
+                dOutput->storage[i] *= (float)(-2.0 / NUM_CLASSES);
             }
             compute_tanh_gradients(&t, dOutput, l.Z);
             compute_gradients(&l, t.dX, &x);
+            /*if (j == 0) {
+                printf("x = ("); print_tensor(&x); printf(")\n");
+                printf("W = ("); print_tensor(l.W); printf(")\n");
+                printf("b = ("); print_tensor(l.b); printf(")\n");
+                printf("output = ("); print_tensor(t.Z); printf(")\n");
+                printf("dOutput = ("); print_tensor(dOutput); printf(")\n");
+                printf("dT = ("); print_tensor(t.dX); printf(")\n");
+                printf("dW = ("); print_tensor(l.dW); printf(")\n");
+                printf("dB = ("); print_tensor(l.dB); printf(")\n");
+            }*/
             subtract(l.W, l.dW, learning_rate, l.W);
             subtract(l.b, l.dB, learning_rate, l.b);
         }
+        /* printf("newW = ("); print_tensor(l.W); printf(")\n");
+        printf("newb = ("); print_tensor(l.b); printf(")\n"); */
         printf("Eval on test set after epoch %u\n", i);
         float loss = 0;
         unsigned int correctly_classified = 0;
@@ -122,11 +137,11 @@ int main() {
     Tensor *X_tr, *Y_tr, *X_te, *Y_te;
     assert(read_inputs("train1989.txt", &X_tr, &Y_tr));
     assert(read_inputs("test1989.txt", &X_te, &Y_te));
-    print_sizes(X_tr);
+    /* print_sizes(X_tr);
     print_sizes(Y_tr);
     print_sizes(X_te);
-    print_sizes(Y_te);
-    simple_tanh_regression(X_tr, Y_tr, X_te, Y_te, EPOCHS, 0.0005f);
+    print_sizes(Y_te); */
+    simple_tanh_regression(X_tr, Y_tr, X_te, Y_te, EPOCHS, 0.03f); // 0.0005f);
     free_tensor(X_tr, true);
     free_tensor(Y_tr, true);
     free_tensor(X_te, true);
