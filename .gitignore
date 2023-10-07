@@ -63,3 +63,4 @@ dkms.conf
 # Train/test Files
 train*
 test*
+conv_comparison_test_*

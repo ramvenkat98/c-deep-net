@@ -136,7 +136,7 @@ void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
     for (unsigned int i = 0; i < layer->input_channels; i++) {
         for (unsigned int j = 0; j < layer->output_channels; j++) {
             for (unsigned int k = 0; k < layer->m; k++) {
-                bool is_first = (i + j + k == 0); // reset gradients on the first one
+                bool is_first = (k == 0); // reset gradients on the first one
                 Tensor dW_view, X_view, dOutput_view;
                 Indexer indices[4];
                 indices[0] = INDEXER(true, i, i + 1);
@@ -171,7 +171,7 @@ void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
         for (unsigned int i = 0; i < layer->input_channels; i++) {
             for (unsigned int j = 0; j < layer->output_channels; j++) {
                 for (unsigned int k = 0; k < layer->m; k++) {
-                    bool is_first = (i + j + k == 0); // as above, reset on the first iteration
+                    bool is_first = (j == 0); // as above, reset on the first iteration
                     Tensor W_view, dX_view, dOutput_view, dOutput_flipped_view;
                     Indexer indices[4];
                     indices[0] = INDEXER(true, i, i + 1);
