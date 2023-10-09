@@ -5,8 +5,10 @@
 #include "layer.h"
 #include <string.h>
 
+#define PRINT_PYTHON_VARIABLE(variable_name, variable_value) \
+    printf(#variable_name " = ("); print_tensor(variable_value); printf(")\n");
+
 int main() {
-    // Use a fixed number so that the test is reproducible
     srand(20);
     ConvLayer l;
     unsigned int m = 5;
@@ -36,12 +38,20 @@ int main() {
     compute_conv_outputs(&l, X);
     compute_conv_gradients(&l, dOutput, X);
     // tbd: this pattern of printing is kind of repetitive, create a macro if doing this in the future
+    PRINT_PYTHON_VARIABLE(X, X)
+    PRINT_PYTHON_VARIABLE(dOutput, dOutput)
+    PRINT_PYTHON_VARIABLE(W, l.W)
+    PRINT_PYTHON_VARIABLE(output, l.output)
+    PRINT_PYTHON_VARIABLE(dW, l.dW)
+    PRINT_PYTHON_VARIABLE(dX, l.dX)
+    /*
     printf("X = ("); print_tensor(X); printf(")\n");
     printf("dOutput = ("); print_tensor(dOutput); printf(")\n");
     printf("W = ("); print_tensor(l.W); printf(")\n");
     printf("output = ("); print_tensor(l.output); printf(")\n");
     printf("dW = ("); print_tensor(l.dW); printf(")\n");
     printf("dX = ("); print_tensor(l.dX); printf(")\n");
+    */
     free_tensor(X, true);
     free_tensor(dOutput, true);
     deallocate_conv_layer_storage(&l);

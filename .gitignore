@@ -61,6 +61,7 @@ dkms.conf
 *.DS_Store
 
 # Train/test Files
-train*
-test*
+train1989*
+test1989*
 conv_comparison_test_*
+conv_layer_pytorch_comparison_test_*

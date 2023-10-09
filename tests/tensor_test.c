@@ -314,8 +314,6 @@ void test_convolution() {
     Tensor *output = create_zero(4, output_sizes);
     for (int i = 0; i < m * n * n * input_channels; i++) *(input->storage + i) = 1;
     for (int i = 0; i < filter_size * filter_size * input_channels * output_channels; i++) *(weights->storage + i) = 1;
-    // init_from_normal_distribution(5.0, 2.0, input->storage, m * n * n * input_channels);
-    // init_from_normal_distribution(-1.0, 1.0, weights->storage, filter_size * filter_size * input_channels * output_channels);
     init_from_normal_distribution(-1.0, 1.0, output->storage, m * n_output * n_output * output_channels);
     convolve(input, weights, stride, l_padding, r_padding, dilation, pad_with, false, output);
     print_tensor(input);
@@ -339,5 +337,7 @@ int main(int argc, char* argv[]) {
     test_tanh_tensor();
     test_elemwise_polynomial();
     test_convolution();
-   // tbd: write test cases for permute_axes
+   // TBD: we should ideally write test cases for permute_axes and some of the other
+   // new tensor operations that we implemented to support convolutions (though I think
+   // these already got pretty well-tested in the course of testing convolutions)
 }

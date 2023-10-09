@@ -5,10 +5,6 @@
 #include "layer.h"
 #include <string.h>
 
-void test_simple_linear_regression() {
-    // 16x16 images (greyscale: 0 to 1) -> 10 dim output, 256 x 10 weights
-}
-
 void test_linear_layer() {
     printf("Testing linear layer...\n");
     FullyConnectedLinearLayer l;
@@ -69,6 +65,7 @@ int main(int argc, char* argv[]) {
     test_linear_layer();
     test_tanh_layer();
     // For conv layer, we have a separate testing file with larger
-    // tests whose outputs we compare to Pytorch outputs
+    // tests whose outputs we compare to Pytorch outputs, since manual
+    // verification is more time-consuming
     return 0;
 }

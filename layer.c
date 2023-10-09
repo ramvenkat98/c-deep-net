@@ -122,7 +122,8 @@ void compute_conv_outputs(ConvLayer *layer, Tensor *X) {
 // Note: At the moment, for the dilation > 1 case, gradient computation is not supported.
 // The reason we can't support it using the existing set of operators is that we don't
 // support the dilation of the *input* during the convolve operator at the moment (only
-// the dilation of the filter). It's not a big change to add this, but also not essential at the moment.
+// the dilation of the filter), which is needed when computing gradients.
+// It's not a big change to add this, but also not essential at the moment.
 void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
     assert(dOutput->dim == 4);
     for (int i = 0; i < 4; i++) {
@@ -133,10 +134,13 @@ void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
     unsigned int dOutput_axes_swaps[4] = {0, 1, 1, 2};
     permute_axes(layer->dW, &dW_swapped, dW_axes_swaps, 4);
     permute_axes(dOutput, &dOutput_swapped, dOutput_axes_swaps, 4);
+    // Compute gradient with respect to weights
     for (unsigned int i = 0; i < layer->input_channels; i++) {
         for (unsigned int j = 0; j < layer->output_channels; j++) {
             for (unsigned int k = 0; k < layer->m; k++) {
-                bool is_first = (k == 0); // reset gradients on the first one
+                // reset gradients on the first pass through, but not after
+                // because we need to sum up the contributions from different (i, j, k)
+                bool is_first = (k == 0);
                 Tensor dW_view, X_view, dOutput_view;
                 Indexer indices[4];
                 indices[0] = INDEXER(true, i, i + 1);
@@ -167,11 +171,12 @@ void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
         + (layer->filter_size - 1) * layer->dilation + 1);
     Tensor W_swapped;
     permute_axes(layer->W, &W_swapped, dW_axes_swaps, 4);
+    // Compute gradient with respect to inputs
     if (layer->dilation == 1) {
         for (unsigned int i = 0; i < layer->input_channels; i++) {
             for (unsigned int j = 0; j < layer->output_channels; j++) {
                 for (unsigned int k = 0; k < layer->m; k++) {
-                    bool is_first = (j == 0); // as above, reset on the first iteration
+                    bool is_first = (j == 0); // as above, reset on the first pass through
                     Tensor W_view, dX_view, dOutput_view, dOutput_flipped_view;
                     Indexer indices[4];
                     indices[0] = INDEXER(true, i, i + 1);
@@ -202,6 +207,6 @@ void compute_conv_gradients(ConvLayer *layer, Tensor *dOutput, Tensor *X) {
         assert(false); // We should not go down this codepath
         // We could implement this with something like dilated_W = dilate(W, layer->dilation) if we wanted to
         // or alternatively (and better), directly pass "input_dilation" as a parameter to the convolution
-        // function. This is not implemented (yet).
+        // function. This is not implemented (at the moment).
     }
 }

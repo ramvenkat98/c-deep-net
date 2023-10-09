@@ -3,13 +3,33 @@
 
 #include <stdbool.h>
 
-#define MAX_TENSOR_DIM 7
+// Note: The threshold of 7 is not a hard limit and we only set it to be this because we don't really
+// need anything more at the moment. If we end up having to support operations on tensors of rank
+// greater than 7, we can just change this number here and it should work (it will just result in
+// slightly more memory to store the size and stride of each dimension).
+
+#define MAX_TENSOR_RANK 7
 #define PRINT_INDENT 2
+
+// This tensor library supports a strided implementation of tensors, similar to Pytorch; this allows
+// us to get many types of views into a tensor for cheap and perform operations like the transpose,
+// permuting some axes in the tensor, reshaping, broadcasting, etc. without allocating new memory!
+// In general, this library also skews towards catching buggy code more easily but at the cost of
+// some user convenience. A couple of examples are:
+// 1. We don't support implicit broadcasting for operations - broadcasting has to be explicit, through
+// the dedicated function for it. This is helpful to catch unintended bugs, albeit at the cost of some
+// convenience to the user.
+// 2. Convolutions are not implemented with optimized methods like im2col. They are implemented using
+// naive loops. Note that convolutions of different strides, dilations, and uneven padding are all
+// supported. (Also note that uneven padding is not a necessity - e.g. in Pytorch, you can add extra
+// padding that still leads to the same output size through rounding) but it is useful because it
+// ensures that the programmer has to be aware of and specify explicitly the right padding dimensions
+// that are necessary to get a valid convolution and can prevent some errors in this way.
 
 typedef struct Tensor {
     unsigned int dim;
-    unsigned int sizes[MAX_TENSOR_DIM];
-    int strides[MAX_TENSOR_DIM];
+    unsigned int sizes[MAX_TENSOR_RANK];
+    int strides[MAX_TENSOR_RANK];
     float *storage;
 } Tensor;
 

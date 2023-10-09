@@ -4,6 +4,25 @@
 #include "tensor.h"
 #include <math.h>
 
+
+/*
+ * List of Some Potential Improvements
+ * ---
+ *  1. Increase test coverage to 100%. Our existing tests for some functions currently only involve tensors
+ *  of up to rank 2, we should add tests for higher-rank tensors as well for all functions. A simple "expect
+ *  test"-style library would likely make testing much more convenient as well.
+ *  2. Enforce more naming consistency for clarity
+ *  (e.g. t vs input, result vs output, create_X vs get_X, elemwise_X, vs X_tensor)
+ *  3. Since we're using C99 and not ANSI C, we could technically migrate some of the macros below to be
+ *  variadic macros instead of having some unnecessary extra args in their function definition.
+ *  4. Others listed as nits in the code below pertaining to individual functions.
+ *  5. (Not necessary but possible) We can bump up the precision from float to double - but at the moment
+ *  float does the job fine for the neural nets trained with this tensor library, and double would just
+ *  increase the memory cost of storage.
+ */
+
+// Indexing Macros for Convenience
+
 #define VECTOR_INDEX(x, i) (*((x)->storage + ((int)i) * (x)->strides[0]))
 #define MATRIX_INDEX(x, i, j) (*((x)->storage + ((int)i) * (x)->strides[0] + ((int)j) * (x)->strides[1]))
 #define RANK_4_TENSOR_INDEX_PTR(x, i, j, k, l) ( \
@@ -14,19 +33,12 @@
         ((int)l) * (x)->strides[3] \
 )
 
-// tbd: move from float to double
-// tbd: add tests for >2d for new macros
-// tbd: verify macro correctness and verify that we're following proper conventions before deleting previous
-// non-macro implementations
-// tbd: enforce more naming consistency for clarity
-// (e.g. t vs input, result vs output, create_X vs get_X, elemwise_X, vs X_tensor)
+// Macros to implement elementwise binary and unary operations
 
 #define ADD(x, y, _arg_1) ((x) + (y))
 #define SUBTRACT(x, y, b) ((x) - (b) * (y))
 #define MULTIPLY(x, y, _arg_1) ((x) * (y))
 
-// we're strictly sticking to ANSI C, which doesn't contain variadic macros so we need these extra args
-// in our macro definition
 #define TANH(x, _arg_1, _arg_2) ((float)(tanh(x)))
 #define POLYNOMIAL(x, coefficients, degree) (polynomial(x, coefficients, degree))
 
@@ -57,7 +69,7 @@
     } \
     else { \
         Tensor input_1_view, input_2_view, output_view; \
-        Indexer indices[MAX_TENSOR_DIM]; \
+        Indexer indices[MAX_TENSOR_RANK]; \
         for (int i = 0; i < input_1->dim; i++) { \
             indices[i].isRange = true; \
             indices[i].start = 0; \
@@ -96,7 +108,7 @@
     } \
     else { \
         Tensor input_view, output_view; \
-        Indexer indices[MAX_TENSOR_DIM]; \
+        Indexer indices[MAX_TENSOR_RANK]; \
         for (int i = 0; i < input->dim; i++) { \
             indices[i].isRange = true; \
             indices[i].start = 0; \
@@ -111,7 +123,6 @@
         } \
     }
 
-// create and fill with zeros
 Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
     Tensor *result = malloc(sizeof(Tensor));
     if (!result) {
@@ -136,8 +147,8 @@ Tensor *create_zero(unsigned int dim, unsigned int *sizes) {
     return result;
 }
 
-// tbd: add asserts to sanitize user inputs
-// init already allocated tensor
+// Init already allocated tensor
+// Pre-condition: Assume that this already allocated tensor is well-formed
 void init_tensor(unsigned int dim, unsigned int *sizes, int *strides, float *storage, Tensor *result) {
     result->dim = dim;
     for (int i = 0; i < dim; i++) {
@@ -157,9 +168,10 @@ Tensor *create_tensor(unsigned int dim, unsigned int *sizes, int *strides, float
     return result;
 }
 
-// Simple helper function to get random normal variables using the inbuilt rand function
-// (which gives a uniform random number between 0 and 1)
-// credit:  ChatGPT - "What is the easiest way to create random normal variables in C?"
+// Simple helper function to get random normal variables using the inbuilt rand function.
+// The credit for the implementation of this helper function goes to ChatGPT - I asked what
+// is the easiest way to generate a random normal variable in C and it produced this nice
+// implementation of the Box-Muller transform.
 double rand_normal(double mean, double stddev) {
     static double n2 = 0.0;
     static int n2_cached = 0;
@@ -182,7 +194,9 @@ double rand_normal(double mean, double stddev) {
     }
 }
 
-// tbd: make this respect the tensor interface more elegantly
+// Nit: This does not really respect the tensor interface at the moment since we directly expose a
+// function that manipulates storage. We can modify this to take in a tensor if this becomes needed
+// (e.g. if we want to init a tensor view that is strided in a way that is not contiguous).
 void init_from_normal_distribution(double mean, double stddev, float *storage, unsigned int total_size) {
     for (int i = 0; i < total_size; i++) {
         storage[i] = (float)(rand_normal(mean, stddev));
@@ -202,7 +216,6 @@ void set_index(Tensor *t, unsigned int *indices, float val) {
     *(get_ptr(t, indices)) = val;
 }
 
-// create and fill with identity
 Tensor *create_identity(unsigned int dim, unsigned int *sizes) {
     assert(dim == 2);
     assert(sizes[0] == sizes[1]);
@@ -244,7 +257,7 @@ void init_view(Tensor *t, Indexer *indices, Tensor *output) {
     }
 }
 
-// tbd: rename this "create_view" so that naming is more consistent
+// Nit: Rename this "create_view" so that naming is more consistent
 // with other "create" operations representing allocs
 Tensor *get_view(Tensor *t, Indexer *indices) {
     Tensor *result = malloc(sizeof(Tensor));
@@ -262,8 +275,16 @@ void free_tensor(Tensor *t, bool free_storage) {
     free(t);
 }
 
-// tbd: get this to properly align each position within a cell of specified width
-void print_tensor_helper(float *current_position, unsigned int remaining_dim, int *remaining_strides, unsigned int *remaining_sizes, int indent, bool is_last_element) {
+// Nit: get this to properly right-align each position within a cell of specified width
+// instead of only aligning properly at the line level.
+void print_tensor_helper(
+    float *current_position,
+    unsigned int remaining_dim,
+    int *remaining_strides,
+    unsigned int *remaining_sizes,
+    int indent,
+    bool is_last_element
+) {
     if (remaining_dim == 0) {
         printf("%f", *current_position);
         if (!is_last_element) {
@@ -304,10 +325,6 @@ void print_tensor(Tensor *t) {
     printf("\n");
 }
 
-// The operations below will, for now, only support 2d matrices and 1d vectors. The reason is that we only
-// need these at the moment, and supporting higher dimensional tensors for these operations will result in
-// unnecessary code bloat and inefficiencies.
-
 void matrix_multiply(Tensor *left, Tensor *right, Tensor *output) {
     assert((left->dim == 2) && (right->dim == 2) && (output->dim == 2));
     assert((output->sizes[0] == left->sizes[0]) && (output->sizes[1] == right->sizes[1]) && (left->sizes[1] == right->sizes[0]));
@@ -329,23 +346,7 @@ void add_helper(Tensor *input_1, Tensor *input_2, void *_unused_1, Tensor *outpu
     ELEMWISE_BINARY_OP(add_helper, ADD, NULL)
 }
 
-// do not support implicit broadcasting
 void add(Tensor *input_1, Tensor *input_2, Tensor *output) {
-    /*
-    assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
-    assert(
-            (input_1->sizes[0] == input_2->sizes[0]) && (input_1->sizes[1] == input_2->sizes[1]) &&
-            (input_1->sizes[0] == output->sizes[0]) && (input_1->sizes[1] == output->sizes[1])
-    );
-    for (unsigned int i = 0; i < input_1->sizes[0]; i++) {
-        for (unsigned int j = 0; j < input_1->sizes[1]; j++) {
-            // tbd: create a simple inline function to replace all instances of this 2d indexing in this file
-            *(output->storage + i * output->strides[0] + j * output->strides[1]) = 
-                *(input_1->storage + i * input_1->strides[0] + j * input_1->strides[1]) +
-                *(input_2->storage + i * input_2->strides[0] + j * input_2->strides[1]);
-        }
-    }
-    */
     add_helper(input_1, input_2, NULL, output);
 }
 
@@ -358,24 +359,12 @@ void elemwise_multiply_helper(Tensor *input_1, Tensor *input_2, void *_unused_1,
 }
 
 void elemwise_multiply(Tensor *input_1, Tensor *input_2, Tensor *output) {
-    /*assert((input_1->dim == 2) && (input_2->dim == 2) && (output->dim == 2));
-    assert(
-            (input_1->sizes[0] == input_2->sizes[0]) && (input_1->sizes[1] == input_2->sizes[1]) &&
-            (input_1->sizes[0] == output->sizes[0]) && (input_1->sizes[1] == output->sizes[1])
-    );
-    for (unsigned int i = 0; i < input_1->sizes[0]; i++) {
-        for (unsigned int j = 0; j < input_1->sizes[1]; j++) {
-            *(output->storage + i * output->strides[0] + j * output->strides[1]) = 
-                (*(input_1->storage + i * input_1->strides[0] + j * input_1->strides[1])) *
-                (*(input_2->storage + i * input_2->strides[0] + j * input_2->strides[1]));
-        }
-    }*/
     elemwise_multiply_helper(input_1, input_2, NULL, output);
 }
 
 void column_sum(Tensor *input, Tensor *output) {
     assert((input->dim == 2) && (output->dim == 1));
-    // tbd: this is pretty cache-unfriendly
+    // Nit: This is pretty cache-unfriendly.
     for (int j = 0; j < (int)(input->sizes[1]); j++) {
         *(output->storage + j * output->strides[0]) = 0;
         for (int i = 0; i < (int)(input->sizes[0]); i++) {
@@ -386,21 +375,6 @@ void column_sum(Tensor *input, Tensor *output) {
 
 // currently only supports matrices (2d) since we don't need more
 void tanh_tensor_helper(Tensor *input, Tensor *output, void *_unused_1, void *_unused_2) {
-    /*
-    assert((input->dim == 2) && (output->dim == 2));
-    assert((input->sizes[0] == output->sizes[0]) && (input->sizes[1] == output->sizes[1]));
-    for (unsigned int i = 0; i < input->sizes[0]; i++) {
-        for (unsigned int j = 0; j < input->sizes[1]; j++) {
-            // tbd: refactor the indexing logic later
-            *(output->storage + i * output->strides[0] + j * output->strides[1]) = (float)(
-                tanh(
-                    (double)
-                    (*(input->storage + i * input->strides[0] + j * input->strides[1]))
-                )
-            );
-        }
-    }
-    */
     ELEMWISE_UNARY_OP(tanh_tensor_helper, TANH, _unused_1, _unused_2)
 }
 
@@ -408,7 +382,6 @@ void tanh_tensor(Tensor *input, Tensor*output) {
     tanh_tensor_helper(input, output, NULL, NULL);
 }
 
-// todo: inline this (since ANSI C doesn't have inline functions, use a macro)
 float polynomial(float x, float *coefficients, unsigned int degree) {
     float output = coefficients[0];
     for (int i = 1; i <= degree; i++) {
@@ -418,19 +391,6 @@ float polynomial(float x, float *coefficients, unsigned int degree) {
 }
 
 void elemwise_polynomial(Tensor *input, Tensor *output, float *coefficients, unsigned int degree) {
-    /* assert((input->dim == 2) && (output->dim == 2));
-    assert((input->sizes[0] == output->sizes[0]) && (input->sizes[1] == output->sizes[1]));
-    for (unsigned int i = 0; i < input->sizes[0]; i++) {
-        for (unsigned int j = 0; j < input->sizes[1]; j++) {
-            *(output->storage + i * output->strides[0] + j * output->strides[1]) = (
-                polynomial(
-                    (*(input->storage + i * input->strides[0] + j * input->strides[1])),
-                    coefficients,
-                    degree
-                )
-            );
-        }
-    } */
     ELEMWISE_UNARY_OP(elemwise_polynomial, POLYNOMIAL, coefficients, degree)
 }
 
@@ -449,7 +409,8 @@ void transpose(Tensor *input, Tensor *output) {
 }
 
 void permute_axes(Tensor *input, Tensor *output, unsigned int *swaps, unsigned int swap_len) {
-    // todo: factor this first part out into a method - duplicated code for copying
+    // Nit: We can factor this first part out into a method - it's similar to the code we had
+    // for copying a tensor
     output->dim = input->dim;
     output->storage = input->storage;
     for (int i = 0; i < input->dim; i++) {
@@ -482,7 +443,7 @@ void flip(Tensor *input, Tensor *output) {
 void reshape(Tensor *input, unsigned int *sizes, unsigned int dim, Tensor *output) {
     unsigned int total_size = 1;
     unsigned int input_total_size = 1;
-    // TBD: create a helper function for this later potentially, since it's nearly identical
+    // Nit: create a helper function for this potentially, since it's nearly identical
     // to the code used in creating a tensor
     for (int i = 0; i < dim; i++) {
         assert(sizes[i] > 0);
@@ -536,7 +497,9 @@ unsigned int get_convolution_output_size(
     return (n + l_padding + r_padding - (filter_size * dilation - (dilation - 1))) / stride + 1;
 }
 
-
+// This convolution is just naively implemented using the full set of loops at the moment. There are
+// a few optimizations that can be done if needed, including optimizing for caching better and
+// better algorithms like im2col.
 void convolve(
     Tensor *input, // m x n x n x input_channels
     Tensor *weights, // filter_size x filter_size x input_channels x output_channels
@@ -578,26 +541,16 @@ void convolve(
                         int current_horizontal_index = current_left;
                         for (unsigned int b = 0; b < filter_size; b++) {
                             for (unsigned int c = 0; c < input_channels; c++) {
-                                // if (k == n_output - 1)
-                                //     printf("i = %u, j = %u, k = %u, l = %u, a = %u, b = %u, c = %u, current top = %d, current left = %d, current_vertical_index = %d, current_horizontal_index = %d\n",
-                                //         i, j, k, l, a, b, c, current_top, current_left, current_vertical_index, current_horizontal_index
-                                //     );
                                 float weight = *RANK_4_TENSOR_INDEX_PTR(weights, a, b, c, l);
                                 if ((current_vertical_index < 0) || (current_horizontal_index < 0)) {
-                                    // if (k == n_output - 1)
-                                    //     printf("Condition 1, adding %f\n", pad_with * weight);
                                     *ptr += pad_with * weight;
                                 }
                                 else if ((current_vertical_index >= input->sizes[1]) || (current_horizontal_index >= input->sizes[2])) {
-                                    // if (k == n_output - 1)
-                                    //     printf("Condition 2, adding %f\n", pad_with * weight);
                                     // verify that padding is sufficient
                                     assert((current_vertical_index - (int)input->sizes[1] < (int)r_padding) && (current_horizontal_index - (int)input->sizes[2] < (int)r_padding));
                                     *ptr += pad_with * weight;
                                 }
                                 else {
-                                    // if (k == n_output - 1)
-                                    //     printf("Condition 3, adding %f\n", (*RANK_4_TENSOR_INDEX_PTR(input, i, current_vertical_index, current_horizontal_index, c)) * weight);
                                     *ptr += (*RANK_4_TENSOR_INDEX_PTR(input, i, current_vertical_index, current_horizontal_index, c)) * weight;
                                 }
                             }
