@@ -11,7 +11,7 @@
 #define MAX_TENSOR_RANK 7
 #define PRINT_INDENT 2
 
-// This tensor library supports a strided implementation of tensors, similar to Pytorch; this allows
+// This tensor library supports a strided implementation of tensors; this allows
 // us to get many types of views into a tensor for cheap and perform operations like the transpose,
 // permuting some axes in the tensor, reshaping, broadcasting, etc. without allocating new memory!
 // In general, this library also skews towards catching buggy code more easily but at the cost of
