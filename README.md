@@ -28,12 +28,31 @@ As a demo/test of the NN library, we can approximately reproduce the Lecun 1989 
 3. Run `./repro.out --repro_conv_net` to train the model, and output model info + train/eval info.
 4. Run `./repro.out --repro_conv_net --epochs 2 --print_variables > conv_comparison_test_output_2.txt` to store a copy of the model state after 2 epochs in `conv_comparison_test_output_2.txt`.
 5. Then run `python3 repro.py --file-to-compare ../c-deep-net/repro-of-lecun1989-repro/conv_comparison_test_output_2.txt --compare-at-epoch 2` to run the Pytorch equivalent of our approximate repro from the forked Pytorch repro repo. This will compare the model state in Pytorch after 2 epochs with our model state in C - and we will see the line `Passed comparison test!` in our output, which verifies that the model weights in our C version and the Pytorch version are close to each other after two epochs when started from the same inputs. We will also see model train/eval stats that are very similar to what we saw in step 3, as we would expect. This lets us verify that our implementation is accurate.
-6. We also have demos of two other models. The first is a very simple classification model (no hidden layers - just one linear layer followed by a tanh layer), which we can run with `./repro.out --simple_tanh_regression`, The second is also a convolutional network but simpler - it contains one convolutional layer with tanh activation, followed by one linear layer with tanh activation. The results for these two models are described in the sub-section on experiments below.
+6. We also have demos of two other models. The first is a very simple classification model (no hidden layers - just one linear layer followed by a tanh layer), which we can run with `./repro.out --simple_tanh_regression`. The second is also a convolutional network but simpler - it contains one convolutional layer with tanh activation, followed by one linear layer with tanh activation; we can run it with `./repro.out --simple_conv_net`. The results for these two models are described in the sub-section on experiments below.
 7. Note that we can also change the learning rate and epoch using the command line arguments `--learning_rate` and `--epochs` respectively. By default, the learning rate is set to 0.03 for all models and the number of epochs is set to 23 (same as in the original paper).
-### Experiments (TBD: add all the numbers and hypotheses)
-We run two experiments. The first compares the three models that we have (simple_tanh_regression, simple_conv_net, and repro_conv_net). We can further compare these results to the results from the original repro. The second compares our initialization with the initialization used in the paper.
+### Experiments and Hypotheses
+First, we compare the three models that we have, and also include the original Pytorch repro for reference (reporting results at the end of 23 epochs for all of them).
 
-## Aside on Computing Convolution Gradients in Full Generality (TBD: add this in)
+| Model                   | Training Set Loss | Test Set Loss | Training Set Classification Rate | Test Set Classification Rate | MACs  | ACTs |
+|-------------------------|-------------------|---------------|----------------------------------|------------------------------|-------|------|
+| Simple Tanh Regression  | 0.074687          | 0.079232      | 0.900699                         | 0.901844                     | 2560  | 10   |
+| Simple Conv Net         | 0.020208          | 0.041772      | 0.974489                         | 0.950174                     | 26880 | 778  |
+| Repro Conv Net          | 0.010147          | 0.031500      | 0.985599                         | 0.954659                     | 61740 | 936  |
+| Original Pytorch Repro  | 0.004073383       | 0.02838382    | 0.9932                           | 0.9591                       | 63660 | 1000 |
 
-## References (TBD: add this in)
+In general, the results align with what we might expect - more complex models perform better, and our repro conv net is fairly close to the original Pytorch repro but expectedly not quite the same (slightly worse) since it includes fewer connections (as mentioned above, our intermediate convolution is a direct 12 channel to 8 channel convolution, instead of the pattern in the paper which splits the 12 input channels into 3 overlapping sets of 8 that it connects to 4 output channels each).
 
+We also note two things we learned from simulating the model in Pytorch:
+* We verified that the absence of biases in the convolutional layer doesn't make a noticeable difference in eval accuracies for the original architecture as well as our modified one.
+* Not including the additional factor in Kaiming init also doesn't make a noticeable difference in eval accuracies for our modified architecture. Uniform vs normal initialization also does not yield a noticeable difference.  
+
+## Some Things that We Can Improve
+1. Convolutions: The implementation of convolutions is naive, which makes the training time for convolutional nets higher than necessary. We are also missing out on a small amount of additional NN library functionality that, if added in, would allow us to support forward and backward passes for convolutions in full generality (currently backward passes are not supported for dilation != 1 - see comments in code for more details). Additionally, we don't support biases in our convolutional layer currently - having test and found that adding biases doesn't really make a difference in the demo model (through equivalent Pytorch models), it wasn't worth including at this point.
+2. Tooling for graphing training curves, etc. Currently we can evaluate by printing things out but this is not ideal.
+3. Support uniform weight initialization, have functions to do things like Kaiming init automatically instead of manually computing it.
+
+## References
+1. The main reference for the demo is of course the [original lecun1989-repro repo](https://github.com/karpathy/lecun1989-repro) and the [paper it is reproducing](https://yann.lecun.com/exdb/publis/pdf/lecun-89e.pdf).
+2. The main reference for my implementation of the tensor library was this [really nice blogpost on Pytorch internals](http://blog.ezyang.com/2019/05/pytorch-internals/) - this was particularly useful in understanding strided representations and how they give us a way to efficiently take many useful types of views on a tensor.  
+3. These [slides on convolutional nets](https://dlsyscourse.org/slides/conv_nets.pdf) (and a linked IPython notebook) as well as [these lecture notes](https://cs231n.github.io/convolutional-networks/) were very helpful to refresh the concept of convolutional nets.
+4. The way in which this [tinygrad library](https://tinygrad.org/) implements MATMMUL using other basic Pytorch operations was very nice (it isn't really related to our implementation, but was interesting to read through).
